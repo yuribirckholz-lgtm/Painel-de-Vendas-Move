@@ -117,7 +117,7 @@ function chipConta(c){
 function agruparCanais(lista){
   const m={};
   (lista||[]).forEach(c=>{
-    const n=normCanal(c.canal), k=n.canal+'|'+n.conta;
+    const n=normCanal((c.canal||'')+' '+(c.conta||'')), k=n.canal+'|'+n.conta;
     if(!m[k]) m[k]={canal:n.canal,conta:n.conta,hoje:{valor:0,pedidos:0},ontem:{valor:0,pedidos:0}};
     m[k].hoje.valor+=(c.hoje&&c.hoje.valor)||0; m[k].hoje.pedidos+=(c.hoje&&c.hoje.pedidos)||0;
     m[k].ontem.valor+=(c.ontem&&c.ontem.valor)||0; m[k].ontem.pedidos+=(c.ontem&&c.ontem.pedidos)||0;
@@ -184,7 +184,7 @@ function render(d){
     return `<tr><td>${esc(i.nome)}${alta?'<span class="tag">em alta</span>':''}<br><small class="d">${esc(i.sku)}</small></td><td class="n"><b>${i.qtd}</b></td><td class="n">${i.qtdOntem}</td><td class="n">${brl0(i.valor)}</td></tr>`;
   }).join('')||'<tr><td colspan="4">Sem vendas hoje</td></tr>';
 
-  $('ult').innerHTML=d.ultimos.map(u=>`<tr><td>${esc(String(u.data).substring(11,16))}</td><td>${esc(u.id)}</td><td>${esc(u.canal||'')}</td><td class="n">${brl(u.total)}</td></tr>`).join('');
+  $('ult').innerHTML=d.ultimos.map(u=>`<tr><td>${esc(String(u.data).substring(11,16))}</td><td>${esc(u.id)}</td><td>${(()=>{const n=normCanal((u.canal||'')+' '+(u.conta||''));return esc(n.canal)+chipConta(n.conta)})()}</td><td class="n">${brl(u.total)}</td></tr>`).join('');
   $('status').textContent='Atualizado às '+new Date().toLocaleTimeString('pt-BR');
 }
 
