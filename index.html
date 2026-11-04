@@ -38,6 +38,8 @@ td,th{padding:7px 4px;border-bottom:1px solid var(--bd);text-align:left;vertical
 th{color:var(--mut);font-weight:500}
 td.n,th.n{text-align:right;white-space:nowrap}
 .bar{height:4px;background:var(--ac);border-radius:2px;margin-top:4px}
+.conta{font-size:10px;font-weight:600;border-radius:4px;padding:1px 6px;margin-left:6px;white-space:nowrap;color:#fff;vertical-align:1px}
+.conta.ml{background:#7c3aed}.conta.ms{background:#ea580c}.conta.nd{background:var(--mut)}
 .tag{font-size:10px;background:var(--up);color:#fff;border-radius:4px;padding:1px 5px;margin-left:4px;white-space:nowrap}
 </style>
 </head>
@@ -85,6 +87,43 @@ const pct = (a,b) => b>0 ? (a/b-1)*100 : null;
 const vp = p => p==null ? '<span class="d">–</span>' : `<span class="${p>=0?'up':'dn'}">${p>=0?'▲':'▼'} ${Math.abs(p).toFixed(0)}%</span>`;
 let DADOS=null, modo='hora', bloqueado=false, CHAVE='';
 try{ CHAVE=localStorage.getItem('chavePainel')||''; }catch(e){}
+// Identifica canal + conta (Movelove / Moveshow) a partir do nome que vem da planilha
+function contaPorTexto(t){
+  if(t.includes('movelove')) return 'Movelove';
+  if(t.includes('moveshow')||t.includes('move show')) return 'Moveshow';
+  return '';
+}
+function normCanal(raw){
+  const orig=String(raw==null?'':raw).trim(), t=orig.toLowerCase();
+  let canal=orig, conta='';
+  if(t.includes('amazon')){ canal='Amazon'; conta='Movelove'; }
+  else if(t.includes('madeira')){ canal='Madeira Madeira'; conta='Movelove'; }
+  else if(t.includes('continental')){ canal='Web Continental'; conta='Moveshow'; }
+  else if(t.includes('shopee')){
+    canal='Shopee';
+    if(t.includes('1005237176')) conta='Moveshow';
+    else if(t.includes('444869236')) conta='Movelove';
+  }
+  else if(t.includes('magazine')||t.includes('magalu')){ canal='Magazine Luiza'; conta=contaPorTexto(t); }
+  else if(t.includes('mercado')){ canal='Mercado Livre'; conta=contaPorTexto(t); }
+  else if(t.includes('movelove2')){ canal='Mercado Livre'; conta='Movelove'; }
+  return {canal,conta};
+}
+function chipConta(c){
+  if(!c) return '';
+  return `<span class="conta ${c==='Movelove'?'ml':'ms'}">${c}</span>`;
+}
+// Junta linhas que caem na mesma loja (canal + conta)
+function agruparCanais(lista){
+  const m={};
+  (lista||[]).forEach(c=>{
+    const n=normCanal(c.canal), k=n.canal+'|'+n.conta;
+    if(!m[k]) m[k]={canal:n.canal,conta:n.conta,hoje:{valor:0,pedidos:0},ontem:{valor:0,pedidos:0}};
+    m[k].hoje.valor+=(c.hoje&&c.hoje.valor)||0; m[k].hoje.pedidos+=(c.hoje&&c.hoje.pedidos)||0;
+    m[k].ontem.valor+=(c.ontem&&c.ontem.valor)||0; m[k].ontem.pedidos+=(c.ontem&&c.ontem.pedidos)||0;
+  });
+  return Object.values(m).sort((a,b)=>b.hoje.valor-a.hoje.valor||b.ontem.valor-a.ontem.valor);
+}
 function pedirChave(){
   const c=prompt('Digite a senha do painel:');
   if(c&&c.trim()){ CHAVE=c.trim(); try{localStorage.setItem('chavePainel',CHAVE)}catch(e){} }
@@ -138,7 +177,7 @@ function render(d){
   $('ins').innerHTML=txt;
 
   const tot=Math.max(1,h.valor);
-  $('canais').innerHTML=d.canais.map(c=>`<tr><td>${esc(c.canal)}<div class="bar" style="width:${c.hoje.valor/tot*100}%"></div></td><td class="n">${brl0(c.hoje.valor)}<br><small class="d">${c.hoje.pedidos} ped.</small></td><td class="n">${brl0(c.ontem.valor)}<br><small class="d">${c.ontem.pedidos} ped.</small></td><td class="n">${vp(pct(c.hoje.valor,c.ontem.valor))}</td></tr>`).join('')||'<tr><td colspan="4">Sem vendas hoje</td></tr>';
+  $('canais').innerHTML=agruparCanais(d.canais).map(c=>`<tr><td>${esc(c.canal)}${chipConta(c.conta)}<div class="bar" style="width:${c.hoje.valor/tot*100}%"></div></td><td class="n">${brl0(c.hoje.valor)}<br><small class="d">${c.hoje.pedidos} ped.</small></td><td class="n">${brl0(c.ontem.valor)}<br><small class="d">${c.ontem.pedidos} ped.</small></td><td class="n">${vp(pct(c.hoje.valor,c.ontem.valor))}</td></tr>`).join('')||'<tr><td colspan="4">Sem vendas hoje</td></tr>';
 
   $('top').innerHTML=d.topItens.map(i=>{
     const alta=i.qtd>=2&&i.qtd>=i.qtdOntem*1.5+1;
