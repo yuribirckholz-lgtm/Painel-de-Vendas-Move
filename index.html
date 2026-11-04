@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Painel de Vendas – Hoje</title>
+<style>
+:root{--bg:#f4f5f7;--card:#fff;--tx:#1b1f24;--mut:#6b7280;--bd:#e5e7eb;--ac:#2563eb;--up:#16a34a;--dn:#dc2626}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1318;--card:#1a2028;--tx:#e8ecf1;--mut:#97a1ae;--bd:#2a323d;--ac:#5b8def;--up:#34d27b;--dn:#f87171}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font-family:system-ui,Arial,sans-serif;padding:20px}
+header{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+h1{font-size:20px;margin:0}
+#status{color:var(--mut);font-size:13px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:12px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:16px}
+.card small{color:var(--mut);font-size:12px}
+.kpi b{display:block;font-size:26px;margin:6px 0 4px}
+.d{font-size:12px;color:var(--mut);line-height:1.5}
+.up{color:var(--up);font-weight:600}.dn{color:var(--dn);font-weight:600}
+h2{font-size:15px;margin:0}
+.topo{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.tg button{border:1px solid var(--bd);background:var(--card);color:var(--tx);padding:4px 10px;font-size:12px;cursor:pointer}
+.tg button:first-child{border-radius:6px 0 0 6px}.tg button:last-child{border-radius:0 6px 6px 0;border-left:0}
+.tg button.on{background:var(--ac);color:#fff;border-color:var(--ac)}
+.chart{display:flex;align-items:flex-end;gap:3px;height:190px}
+.col{flex:1;display:flex;align-items:flex-end;gap:1px;height:100%}
+.col i{flex:1;border-radius:2px 2px 0 0;min-height:1px;display:block}
+.col .o{background:var(--mut);opacity:.35}.col .h{background:var(--ac)}.col.agora .h{background:var(--up)}
+.lab{display:flex;gap:3px;margin-top:4px;color:var(--mut);font-size:10px}.lab span{flex:1;text-align:center}
+.leg{display:flex;gap:14px;font-size:12px;color:var(--mut);margin-top:8px;flex-wrap:wrap}
+.leg i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px}
+.ins{margin-top:10px;font-size:13px;padding:10px;border-radius:8px;background:var(--bg)}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:12px;margin-top:12px}
+.tab{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+td,th{padding:7px 4px;border-bottom:1px solid var(--bd);text-align:left;vertical-align:top}
+th{color:var(--mut);font-weight:500}
+td.n,th.n{text-align:right;white-space:nowrap}
+.bar{height:4px;background:var(--ac);border-radius:2px;margin-top:4px}
+.tag{font-size:10px;background:var(--up);color:#fff;border-radius:4px;padding:1px 5px;margin-left:4px;white-space:nowrap}
+</style>
+</head>
+<body>
+<header><h1>Vendas de hoje</h1><span id="status">Carregando…</span></header>
+
+<div class="grid">
+  <div class="card kpi"><small>Faturamento hoje</small><b id="k1">–</b><div class="d" id="k1d"></div></div>
+  <div class="card kpi"><small>Pedidos hoje</small><b id="k2">–</b><div class="d" id="k2d"></div></div>
+  <div class="card kpi"><small>Ticket médio</small><b id="k3">–</b><div class="d" id="k3d"></div></div>
+  <div class="card kpi"><small>Projeção do dia</small><b id="k4">–</b><div class="d" id="k4d"></div></div>
+</div>
+
+<div class="card">
+  <div class="topo"><h2>Hora a hora: hoje x ontem</h2>
+    <div class="tg"><button id="bH" class="on">Por hora</button><button id="bA">Acumulado</button></div></div>
+  <div class="chart" id="chart"></div>
+  <div class="lab" id="lab"></div>
+  <div class="leg"><span><i style="background:var(--ac)"></i>Hoje</span><span><i style="background:var(--mut);opacity:.4"></i>Ontem</span><span><i style="background:var(--up)"></i>Hora atual</span></div>
+  <div class="ins" id="ins"></div>
+</div>
+
+<div class="cols">
+  <div class="card tab"><h2 style="margin-bottom:10px">Canais: hoje x ontem (até agora)</h2>
+    <table><thead><tr><th>Canal</th><th class="n">Hoje</th><th class="n">Ontem</th><th class="n">Var.</th></tr></thead><tbody id="canais"></tbody></table></div>
+  <div class="card tab"><h2 style="margin-bottom:10px">Itens mais vendidos hoje</h2>
+    <table><thead><tr><th>Item</th><th class="n">Hoje</th><th class="n">Ontem</th><th class="n">Valor</th></tr></thead><tbody id="top"></tbody></table></div>
+</div>
+<div class="card tab" style="margin-top:12px"><h2 style="margin-bottom:10px">Últimos pedidos</h2>
+  <table><thead><tr><th>Hora</th><th>Pedido</th><th>Canal</th><th class="n">Total</th></tr></thead><tbody id="ult"></tbody></table></div>
+
+<script>
+// ===== CONFIGURE AQUI =====
+const URL_SCRIPT = 'https://script.google.com/macros/s/AKfycbwGlexvHhTUnuISt8LBgtdNIGwzY9QlCFVXM3yi-gRgmZfiyMMbkcBxIe-k97VGpqpbZw/exec'; // termina em /exec
+// A senha (CHAVE_PAINEL) NÃO fica neste arquivo: o painel pede na primeira abertura
+// e o navegador lembra. Quem não souber a senha não vê nenhum dado.
+const INTERVALO_SEG = 120;                            // atualiza a cada 2 min
+// ==========================
+
+const $ = id => document.getElementById(id);
+const brl = v => (v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+const brl0 = v => (v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL',maximumFractionDigits:0});
+const esc = s => String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const pct = (a,b) => b>0 ? (a/b-1)*100 : null;
+const vp = p => p==null ? '<span class="d">–</span>' : `<span class="${p>=0?'up':'dn'}">${p>=0?'▲':'▼'} ${Math.abs(p).toFixed(0)}%</span>`;
+let DADOS=null, modo='hora', bloqueado=false, CHAVE='';
+try{ CHAVE=localStorage.getItem('chavePainel')||''; }catch(e){}
+function pedirChave(){
+  const c=prompt('Digite a senha do painel:');
+  if(c&&c.trim()){ CHAVE=c.trim(); try{localStorage.setItem('chavePainel',CHAVE)}catch(e){} }
+  return CHAVE;
+}
+
+function buscar(){
+  return new Promise((ok,err)=>{
+    const cb='cb'+Date.now(), s=document.createElement('script');
+    const fim=()=>{delete window[cb];s.remove();clearTimeout(t)};
+    const t=setTimeout(()=>{fim();err(new Error('tempo esgotado'))},90000);
+    window[cb]=d=>{fim();ok(d)};
+    s.onerror=()=>{fim();err(new Error('não foi possível acessar a URL do script'))};
+    s.src=URL_SCRIPT.trim()+'?k='+encodeURIComponent(CHAVE.trim())+'&callback='+cb;
+    document.head.appendChild(s);
+  });
+}
+
+function grafico(){
+  const d=DADOS, ag=d.horaAtual, H=d.porHora;
+  let hj=H.hoje.map(x=>x.valor), on=H.ontem.map(x=>x.valor);
+  if(modo==='acum'){ let a=0,b=0; hj=hj.map(v=>a+=v); on=on.map(v=>b+=v); }
+  const max=Math.max(1,...on,...hj.slice(0,ag+1));
+  $('chart').innerHTML=hj.map((v,i)=>`<div class="col ${i===ag?'agora':''}" title="${i}h | hoje: ${brl(v)} | ontem: ${brl(on[i])}"><i class="o" style="height:${on[i]/max*100}%"></i><i class="h" style="height:${i<=ag?v/max*100:0}%"></i></div>`).join('');
+  $('lab').innerHTML=hj.map((_,i)=>`<span>${i%3===0?i+'h':''}</span>`).join('');
+}
+
+function render(d){
+  const ag=d.horaAtual, h=d.hoje, o=d.ontemAte, sp=d.semanaPassadaAte;
+  $('k1').textContent=brl(h.valor);
+  $('k1d').innerHTML=`${vp(pct(h.valor,o.valor))} vs ontem até ${ag}h (${brl0(o.valor)})<br>${vp(pct(h.valor,sp.valor))} vs semana passada`;
+  $('k2').textContent=h.pedidos;
+  $('k2d').innerHTML=`${vp(pct(h.pedidos,o.pedidos))} vs ontem até ${ag}h (${o.pedidos})<br>${vp(pct(h.pedidos,sp.pedidos))} vs semana passada`;
+  const t=h.pedidos?h.valor/h.pedidos:0, to=o.pedidos?o.valor/o.pedidos:0;
+  $('k3').textContent=brl(t);
+  $('k3d').innerHTML=`${vp(pct(t,to))} vs ontem (${brl0(to)})`;
+  const proj=o.valor>0?h.valor/o.valor*d.ontemTotal.valor:0;
+  $('k4').textContent=brl0(proj);
+  $('k4d').innerHTML=`Estimativa pelo ritmo de ontem.<br>Ontem fechou em ${brl0(d.ontemTotal.valor)} (${d.ontemTotal.pedidos} pedidos)`;
+
+  grafico();
+
+  const H=d.porHora, hj=H.hoje, on=H.ontem;
+  let melhor=0; hj.forEach((x,i)=>{if(i<=ag&&x.valor>hj[melhor].valor)melhor=i});
+  const atual=hj[ag], ant=hj[ag-1]||{valor:0,pedidos:0};
+  const p=pct(h.valor,o.valor);
+  let txt = p==null ? 'Sem base de comparação com ontem.' :
+    `Até as ${ag}h, hoje está <b class="${p>=0?'up':'dn'}">${Math.abs(p).toFixed(0)}% ${p>=0?'acima':'abaixo'}</b> de ontem no faturamento.`;
+  if(hj[melhor].valor) txt+=` Melhor hora do dia: <b>${melhor}h</b> (${hj[melhor].pedidos} pedidos, ${brl0(hj[melhor].valor)}).`;
+  txt+=` Hora atual (${ag}h): ${atual.pedidos} pedidos, ${brl0(atual.valor)}; ontem nessa hora: ${on[ag].pedidos} pedidos, ${brl0(on[ag].valor)}.`;
+  $('ins').innerHTML=txt;
+
+  const tot=Math.max(1,h.valor);
+  $('canais').innerHTML=d.canais.map(c=>`<tr><td>${esc(c.canal)}<div class="bar" style="width:${c.hoje.valor/tot*100}%"></div></td><td class="n">${brl0(c.hoje.valor)}<br><small class="d">${c.hoje.pedidos} ped.</small></td><td class="n">${brl0(c.ontem.valor)}<br><small class="d">${c.ontem.pedidos} ped.</small></td><td class="n">${vp(pct(c.hoje.valor,c.ontem.valor))}</td></tr>`).join('')||'<tr><td colspan="4">Sem vendas hoje</td></tr>';
+
+  $('top').innerHTML=d.topItens.map(i=>{
+    const alta=i.qtd>=2&&i.qtd>=i.qtdOntem*1.5+1;
+    return `<tr><td>${esc(i.nome)}${alta?'<span class="tag">em alta</span>':''}<br><small class="d">${esc(i.sku)}</small></td><td class="n"><b>${i.qtd}</b></td><td class="n">${i.qtdOntem}</td><td class="n">${brl0(i.valor)}</td></tr>`;
+  }).join('')||'<tr><td colspan="4">Sem vendas hoje</td></tr>';
+
+  $('ult').innerHTML=d.ultimos.map(u=>`<tr><td>${esc(String(u.data).substring(11,16))}</td><td>${esc(u.id)}</td><td>${esc(u.canal||'')}</td><td class="n">${brl(u.total)}</td></tr>`).join('');
+  $('status').textContent='Atualizado às '+new Date().toLocaleTimeString('pt-BR');
+}
+
+async function carregar(){
+  if(bloqueado) return;
+  if(!CHAVE && !pedirChave()){ bloqueado=true; $('status').textContent='Senha necessária. Atualize a página (F5) e digite a senha.'; return; }
+  try{
+    const d=await buscar();
+    if(d.erro) throw new Error(d.erro);
+    DADOS=d; render(d);
+  }catch(e){
+    if(/acesso negado/.test(e.message)){
+      bloqueado=true; CHAVE=''; try{localStorage.removeItem('chavePainel')}catch(x){}
+      $('status').textContent='Senha incorreta. Atualize a página (F5) para tentar de novo.';
+    } else { $('status').textContent='Erro ao carregar: '+e.message; }
+  }
+}
+$('bH').onclick=()=>{modo='hora';$('bH').className='on';$('bA').className='';if(DADOS)grafico()};
+$('bA').onclick=()=>{modo='acum';$('bA').className='on';$('bH').className='';if(DADOS)grafico()};
+carregar();
+setInterval(carregar,INTERVALO_SEG*1000);
+</script>
+</body>
+</html>
