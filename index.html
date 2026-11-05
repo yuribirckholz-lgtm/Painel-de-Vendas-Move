@@ -129,7 +129,7 @@ function pedirChave(){
   return CHAVE;
 }
 $('data').textContent=new Date().toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'long',year:'numeric'});
-
+  
 function buscar(){
   return new Promise((ok,err)=>{
     const cb='cb'+Date.now(), s=document.createElement('script');
