@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Análise de vendas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #f4f5f7; --surface: #ffffff; --ink: #151a24; --muted: #647084; --line: #e1e4ea; --soft: #eef0f4;
+  --ref: #5468b8; --cur: #0b8a7d; --good: #17803f; --bad: #c4352f; --warn: #a86a00;
+  --good-bg: #e3f4ea; --bad-bg: #fbe6e4; --warn-bg: #fdf0d5; --neutral-bg: #eceef2; --accent-bg: #e4e9f8;
+  --font: "Instrument Sans", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11141a; --surface: #1a1e27; --ink: #e9ecf1; --muted: #9aa4b5; --line: #2c3340; --soft: #232935;
+    --ref: #8ea1ec; --cur: #3cc2b2; --good: #52c47f; --bad: #ff7d75; --warn: #f0b24a;
+    --good-bg: #17301f; --bad-bg: #3a1c1b; --warn-bg: #3a2c10; --neutral-bg: #262c38; --accent-bg: #222b4a;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11141a; --surface: #1a1e27; --ink: #e9ecf1; --muted: #9aa4b5; --line: #2c3340; --soft: #232935;
+  --ref: #8ea1ec; --cur: #3cc2b2; --good: #52c47f; --bad: #ff7d75; --warn: #f0b24a;
+  --good-bg: #17301f; --bad-bg: #3a1c1b; --warn-bg: #3a2c10; --neutral-bg: #262c38; --accent-bg: #222b4a;
+}
+html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+*, *::before, *::after { box-sizing: inherit; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font); font-size: 15px; line-height: 1.45; -webkit-font-smoothing: antialiased; }
+.wrap { max-width: 1180px; margin: 0 auto; padding: 28px 20px 64px; }
+h1 { font-size: 26px; font-weight: 700; letter-spacing: -0.01em; margin: 0 0 4px; }
+h2 { font-size: 17px; font-weight: 650; margin: 0 0 4px; letter-spacing: -0.005em; }
+.sub { color: var(--muted); margin: 0 0 22px; max-width: 70ch; }
+.num { font-variant-numeric: tabular-nums; }
+
+/* envio das bases */
+.drops { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.drop { position: relative; display: block; border: 1.5px dashed var(--line); border-radius: 12px; background: var(--surface); padding: 18px 18px 16px; cursor: pointer; transition: border-color .15s, background .15s; min-height: 118px; }
+.drop:hover, .drop.over { border-color: var(--c); background: color-mix(in srgb, var(--c) 6%, var(--surface)); }
+.drop:focus-within { outline: 2px solid var(--c); outline-offset: 2px; }
+.drop.ref { --c: var(--ref); } .drop.cur { --c: var(--cur); }
+.drop input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+.drop .tag { display: inline-flex; align-items: center; gap: 8px; font-weight: 650; font-size: 15px; }
+.drop .tag i { width: 10px; height: 10px; border-radius: 50%; background: var(--c); display: inline-block; }
+.drop .hint { color: var(--muted); font-size: 14px; margin-top: 6px; }
+.drop.ok { border-style: solid; border-color: var(--c); }
+.drop .meta { margin-top: 8px; font-size: 14px; }
+.drop .meta b { font-weight: 650; }
+.drop .err { color: var(--bad); margin-top: 8px; font-size: 14px; }
+.privacy { color: var(--muted); font-size: 13px; margin: 10px 2px 0; }
+
+/* ajustes */
+details.adj { margin-top: 18px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+details.adj summary { cursor: pointer; padding: 12px 16px; font-weight: 600; list-style: none; display: flex; justify-content: space-between; align-items: center; }
+details.adj summary::-webkit-details-marker { display: none; }
+details.adj summary span { color: var(--muted); font-weight: 400; font-size: 14px; }
+.adj-body { padding: 4px 16px 16px; display: grid; gap: 16px; }
+.adj-row { display: flex; flex-wrap: wrap; gap: 18px; align-items: flex-end; }
+.field label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+.field input, .field select, .search { font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; min-width: 0; }
+.field input[type=number] { width: 90px; }
+.field input:focus, .field select:focus, .search:focus { outline: 2px solid var(--cur); outline-offset: 1px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px; background: var(--bg); cursor: pointer; user-select: none; }
+.chip input { accent-color: var(--cur); margin: 0; }
+.chip.on { border-color: var(--cur); background: color-mix(in srgb, var(--cur) 10%, var(--bg)); }
+.note { color: var(--muted); font-size: 13px; }
+
+/* resultado */
+#out { margin-top: 26px; display: none; }
+.ledger { display: grid; grid-template-columns: repeat(4, 1fr); background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.cell { padding: 16px 18px; border-left: 1px solid var(--line); }
+.cell:first-child { border-left: 0; }
+.cell .lb { color: var(--muted); font-size: 13.5px; }
+.cell .big { font-size: 25px; font-weight: 700; letter-spacing: -0.015em; margin: 4px 0 2px; }
+.cell .ln { font-size: 13.5px; color: var(--muted); }
+.cell .ln b { color: var(--ink); font-weight: 600; }
+.up { color: var(--good); } .down { color: var(--bad); } .flat { color: var(--muted); }
+.cell .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+.banner { margin-top: 12px; padding: 10px 14px; border-radius: 10px; background: var(--accent-bg); font-size: 14px; }
+.banner.warn { background: var(--warn-bg); }
+
+.panel { margin-top: 18px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 18px; }
+.panel-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.legend { display: flex; gap: 16px; font-size: 13.5px; color: var(--muted); flex-wrap: wrap; }
+.legend i { display: inline-block; width: 18px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
+.chartbox { position: relative; height: 280px; }
+
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.loss-list { list-style: none; margin: 10px 0 0; padding: 0; }
+.loss-list li { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; padding: 8px 0; border-top: 1px solid var(--line); align-items: baseline; }
+.loss-list li:first-child { border-top: 0; }
+.loss-list .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.loss-list .nm small { color: var(--muted); }
+.loss-list .vl { font-weight: 600; }
+.loss-list .bar { grid-column: 1 / -1; height: 4px; border-radius: 2px; background: var(--soft); overflow: hidden; }
+.loss-list .bar span { display: block; height: 100%; background: var(--bad); border-radius: 2px; }
+.empty { color: var(--muted); padding: 10px 0; }
+
+.tabs { display: flex; gap: 4px; background: var(--soft); border-radius: 10px; padding: 4px; width: max-content; max-width: 100%; margin-top: 22px; }
+.tab { font: inherit; font-weight: 600; font-size: 14.5px; color: var(--muted); background: transparent; border: 0; border-radius: 7px; padding: 7px 16px; cursor: pointer; }
+.tab[aria-selected="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+.tab:focus-visible { outline: 2px solid var(--cur); }
+
+#tItem tfoot td { border-top: 2px solid var(--line); font-weight: 700; background: rgba(127,127,127,.06); }
+.tscroll { overflow-x: auto; margin: 0 -4px; padding: 0 4px; }
+table { width: 100%; border-collapse: collapse; font-size: 14.5px; min-width: 760px; }
+th { text-align: right; font-weight: 600; color: var(--muted); font-size: 13px; padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th:first-child, td:first-child { text-align: left; }
+td { text-align: right; padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+td small, .cellsub { display: block; color: var(--muted); font-size: 12.5px; }
+tr.mk td { font-weight: 650; background: color-mix(in srgb, var(--soft) 55%, transparent); }
+tr.ac td:first-child { padding-left: 28px; color: var(--ink); }
+tr.ac td { font-size: 14px; }
+tr.tot td { font-weight: 700; border-top: 2px solid var(--line); border-bottom: 0; }
+td.item { max-width: 420px; }
+td.item .t { display: block; overflow-wrap: anywhere; }
+.badge { display: inline-block; font-size: 12.5px; font-weight: 600; padding: 2px 9px; border-radius: 999px; white-space: nowrap; }
+.b-pior { background: var(--bad-bg); color: var(--bad); }
+.b-melhor { background: var(--good-bg); color: var(--good); }
+.b-igual { background: var(--neutral-bg); color: var(--muted); }
+.b-novo { background: var(--accent-bg); color: var(--ref); }
+.b-parou { background: var(--warn-bg); color: var(--warn); }
+.toolbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin: 14px 0 12px; }
+.search { width: 230px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { font: inherit; font-size: 14px; background: var(--bg); color: var(--muted); border: 0; padding: 7px 12px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+.fchips { display: flex; flex-wrap: wrap; gap: 6px; }
+.fchip { font: inherit; font-size: 13.5px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); border-radius: 999px; padding: 4px 11px; cursor: pointer; }
+.fchip[aria-pressed="true"] { border-color: var(--ink); background: var(--ink); color: var(--bg); }
+.more { margin: 14px auto 0; display: block; font: inherit; font-weight: 600; background: var(--soft); color: var(--ink); border: 0; border-radius: 8px; padding: 9px 18px; cursor: pointer; }
+.sumline { font-size: 14px; color: var(--muted); margin: 4px 0 0; }
+
+@media (max-width: 820px) {
+  .drops, .two { grid-template-columns: 1fr; }
+  .ledger { grid-template-columns: 1fr 1fr; }
+  .cell:nth-child(3) { border-left: 0; }
+  .cell:nth-child(n+3) { border-top: 1px solid var(--line); }
+  .wrap { padding: 20px 14px 56px; }
+  h1 { font-size: 22px; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+.mtabs{margin-top:22px}
+.r-preco{background:var(--accent-bg);color:var(--ref)}.r-frete{background:var(--bad-bg);color:var(--bad)}.r-prazo{background:var(--warn-bg);color:var(--warn)}.r-outro{background:var(--neutral-bg);color:var(--muted)}
+.hot{background:var(--bad-bg);color:var(--bad)}
+td.mut{color:var(--muted)}
+.v3{display:grid;gap:18px;margin-top:18px}.v3 .panel{margin-top:0}
+.dxg{display:grid;grid-template-columns:1fr 1fr;gap:14px}.dx{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px}.dxh{display:flex;justify-content:space-between;gap:10px;font-size:16px;margin-bottom:6px}.act{margin-top:10px;padding:9px 12px;border-radius:8px;background:var(--accent-bg);font-size:14px}@media(max-width:820px){.dxg{grid-template-columns:1fr}}
+
+.drop.live{cursor:default;border-style:solid}
+.drop.live input,.drop.live select{position:static;opacity:1;width:auto;height:auto;cursor:pointer;font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink)}
+.livebtn{font:inherit;font-size:13px;padding:6px 12px;border-radius:8px;border:1px solid var(--line);background:var(--soft);color:var(--ink);cursor:pointer;margin-left:6px}
+.livebtn:hover{border-color:var(--c)}
+</style>
+<script src="config.js"></script><script src="api.js"></script>
+</head>
+<body>
+<script>montarNav('mes')</script>
+<div class="wrap">
+  <h1>Comparador de vendas</h1>
+  <p class="sub">Os dados vêm direto do ANYMARKET. O comparativo por canal, conta e item (inclusive a curva A) aparece sozinho, com a projeção de fechamento do mês atual contra o mês de referência.</p>
+
+  <div class="drops">
+    <div class="drop ref live" id="dropRef"><span class="tag"><i></i>Mês de referência</span>
+      <div class="hint"><input type="month" id="mRef" aria-label="Mês de referência"></div><div data-info></div></div>
+    <div class="drop cur live" id="dropCur"><span class="tag"><i></i>Mês atual</span>
+      <div class="hint"><input type="month" id="mCur" aria-label="Mês atual"><button type="button" class="livebtn" id="rec">Atualizar agora</button></div><div data-info></div></div>
+  </div>
+  <p class="privacy">Dados buscados do ANYMARKET pelo seu script do Google. O mês de referência começa no mês anterior; troque para comparar com o seu melhor mês.</p>
+
+  <details class="adj" id="adj" hidden>
+    <summary>Ajustes do cálculo <span id="adjSummary"></span></summary>
+    <div class="adj-body">
+      <div class="adj-row">
+        <div class="field"><label for="sVal">Valor considerado como venda</label>
+          <select id="sVal"><option value="vProd">Valor dos produtos (sem frete)</option><option value="vTotal" selected>Total do pedido (com frete)</option></select></div>
+        <div class="field"><label for="sN">Comparar até o dia</label><input type="number" id="sN" min="1" max="31"></div>
+        <div class="field"><label for="sTol">Considerar “igual” até (%)</label><input type="number" id="sTol" min="0" max="50" value="5"></div>
+      </div>
+      <div>
+        <div class="note" style="margin-bottom:6px">Status que contam como venda (cancelados, devolvidos e retornando ficam de fora por padrão):</div>
+        <div class="chips" id="sStatus"></div>
+      </div>
+      <div class="note" id="nDayNote"></div>
+    </div>
+  </details>
+
+  <div id="out">
+    <div class="tabs mtabs" role="tablist"><button class="tab" role="tab" id="mt_comp" aria-selected="true">Comparativo</button><button class="tab" role="tab" id="mt_queda" aria-selected="false">Por que caiu</button><button class="tab" role="tab" id="mt_cancel" aria-selected="false">Cancelamentos</button></div>
+    <div id="vComp">
+    <div class="ledger" id="ledger"></div>
+    <div id="banner"></div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <div><h2>Venda acumulada dia a dia</h2><div class="note">A linha pontilhada é a projeção no ritmo atual.</div></div>
+        <div class="legend"><span><i style="background:var(--ref)"></i><span id="lgRef"></span></span><span><i style="background:var(--cur)"></i><span id="lgCur"></span></span></div>
+      </div>
+      <div class="chartbox"><canvas id="chart" role="img" aria-label="Venda acumulada por dia, mês de referência contra mês atual"></canvas></div>
+    </div>
+
+    <div class="two">
+      <div class="panel"><h2>Canais que mais caíram</h2><div class="note" id="lossCanalNote"></div><ul class="loss-list" id="lossCanal"></ul></div>
+      <div class="panel"><h2>Itens que mais caíram</h2><div class="note" id="lossItemNote"></div><ul class="loss-list" id="lossItem"></ul></div>
+    </div>
+
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" id="tabCanal" aria-selected="true">Por canal e conta</button>
+      <button class="tab" role="tab" id="tabItem" aria-selected="false">Por item</button>
+    </div>
+
+    <div class="panel" id="paneCanal" style="margin-top:12px">
+      <div class="tscroll"><table id="tCanal"></table></div>
+    </div>
+
+    <div class="panel" id="paneItem" style="margin-top:12px" hidden>
+      <div class="sumline" id="itemSum"></div>
+      <div class="toolbar">
+        <div class="field"><label for="iQ">Buscar item ou SKU</label><input class="search" id="iQ" type="search" placeholder="Ex.: cuba, 1916"></div>
+        <div class="field"><label for="iCanal">Canal</label><select id="iCanal"></select></div>
+        <div class="field"><label for="iSort">Ordenar por</label>
+          <select id="iSort"><option value="down">Maior queda</option><option value="up">Maior alta</option><option value="cur">Maior venda atual</option><option value="ref">Maior venda na referência</option></select></div>
+        <div class="field"><label>Comparar por</label>
+          <div class="seg"><button id="mRev" aria-pressed="true">R$</button><button id="mQty" aria-pressed="false">Unidades</button></div></div>
+      </div>
+      <div class="fchips" id="iChips" style="margin-bottom:10px"></div>
+      <div class="tscroll"><table id="tItem"></table></div>
+      <button class="more" id="iMore" hidden>Mostrar mais</button>
+    </div>
+    </div>
+    <div id="vQueda" hidden></div>
+    <div id="vCancel" hidden></div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script>
+/* ===== NÚCLEO DE CÁLCULO ===== */
+const strip = s => String(s == null ? '' : s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().trim().replace(/\s+/g, ' ');
+
+const COLS = {
+  order: 'ID ANYMARKET', date: 'DATA PEDIDO', mkt: 'MARKETPLACE', conta: 'CONTA', status: 'STATUS',
+  sku: 'SKU PRODUTO', title: 'TITULO PRODUTO', qty: 'QUANTIDADE', unit: 'VALOR UNITARIO',
+  prod: 'VALOR TOTAL DOS PRODUTOS', total: 'TOTAL DO PEDIDO'
+};
+const REQUIRED = ['order', 'date', 'mkt', 'status', 'sku', 'qty', 'prod', 'total'];
+
+function num(v) {
+  if (typeof v === 'number') return isFinite(v) ? v : 0;
+  if (v == null) return 0;
+  let s = String(v).replace(/R\$/g, '').replace(/\s/g, '');
+  if (s.indexOf(',') >= 0) s = s.replace(/\./g, '').replace(',', '.');
+  const n = parseFloat(s);
+  return isFinite(n) ? n : 0;
+}
+
+function parseDate(v) {
+  if (v instanceof Date) return isNaN(v) ? null : v;
+  if (typeof v === 'number') {
+    const d = new Date(Math.round((v - 25569) * 86400 * 1000));
+    return new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), d.getUTCHours(), d.getUTCMinutes(), d.getUTCSeconds());
+  }
+  if (typeof v === 'string') {
+    let m = v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+    if (m) return new Date(+m[3], +m[2] - 1, +m[1], +(m[4] || 0), +(m[5] || 0), +(m[6] || 0));
+    m = v.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?/);
+    if (m) return new Date(+m[1], +m[2] - 1, +m[3], +(m[4] || 0), +(m[5] || 0), +(m[6] || 0));
+  }
+  return null;
+}
+
+const daysInMonth = (y, m) => new Date(y, m + 1, 0).getDate();
+
+/* Converte as linhas da planilha em linhas de venda por item.
+   O valor do pedido se repete em cada item do mesmo pedido, então é rateado
+   proporcionalmente (valor unitário x quantidade) para não contar em dobro. */
+function prepare(rows) {
+  if (!rows.length) throw new Error('A aba de dados está vazia.');
+  const keyMap = {};
+  Object.keys(rows[0]).forEach(k => { const n = strip(k); if (!(n in keyMap)) keyMap[n] = k; });
+  const missing = REQUIRED.filter(c => !(COLS[c] in keyMap)).map(c => COLS[c]);
+  if (missing.length) throw new Error('Não achei estas colunas: ' + missing.join(', ') + '.');
+  const K = {}; Object.keys(COLS).forEach(c => K[c] = keyMap[COLS[c]]);
+  const kk = Object.keys(keyMap), hasV = n => n && rows.some(r => r[keyMap[n]] != null && r[keyMap[n]] !== '');
+  const fp = [/^ENTREGA ESPERADA/, /PREVISAO ENTREGA/, /PRAZO/, /DATA.*ENTREGA/].map(re => kk.find(n => re.test(n) && !/POSTAGEM|ENVIO|DESPACHO|TRANSPORTADORA/.test(n))).find(hasV);
+  const fm = [kk.find(n => /MOTIVO/.test(n) && /CANCEL/.test(n)), kk.find(n => /ORIGEM/.test(n) && /CANCEL/.test(n))].find(hasV);
+  K.frete = 'FRETE' in keyMap ? keyMap['FRETE'] : null;
+  K.prazo = fp ? keyMap[fp] : null; K.motivo = fm ? keyMap[fm] : null;
+  const prazoOf = (r, d0) => { const v = K.prazo ? r[K.prazo] : null; if (v == null || v === '') return null; let z = null;
+    if (typeof v === 'number') z = v < 1000 ? v : (parseDate(v) - d0) / 864e5; else { const dd = /\d{1,2}\/\d{1,2}\/\d{4}|\d{4}-\d{2}-\d{2}/.test(v) ? parseDate(v) : null; z = dd ? (dd - d0) / 864e5 : num(v); }
+    return isFinite(z) && z >= 0 && z <= 120 ? z : null; };
+
+  const lines = [];
+  rows.forEach((r, i) => {
+    const date = parseDate(r[K.date]);
+    if (!date) return;
+    const oid = r[K.order] != null && r[K.order] !== '' ? String(r[K.order]) : 'linha' + i;
+    const mkt = String(r[K.mkt] == null ? '—' : r[K.mkt]).trim();
+    const conta = K.conta && r[K.conta] != null ? String(r[K.conta]).trim() : '—';
+    const qty = num(r[K.qty]) || 1;
+    lines.push({
+      oid, date, day: date.getDate(), ym: date.getFullYear() * 100 + date.getMonth() + 1,
+      mkt, conta, ck: mkt + '||' + conta,
+      status: String(r[K.status] == null ? '—' : r[K.status]).trim(),
+      sku: String(r[K.sku] == null ? '—' : r[K.sku]).trim(),
+      title: K.title && r[K.title] ? String(r[K.title]).trim() : '',
+      qty, unit: K.unit ? num(r[K.unit]) : 0,
+      oProd: num(r[K.prod]), oTotal: num(r[K.total]), oFrete: K.frete ? num(r[K.frete]) : null, vProd: 0, vTotal: 0, vFrete: 0,
+      prazo: prazoOf(r, date), motivo: K.motivo && r[K.motivo] ? String(r[K.motivo]).trim() : ''
+    });
+  });
+  if (!lines.length) throw new Error('Não consegui ler nenhuma data na coluna DATA PEDIDO.');
+
+  // mês predominante da base
+  const cnt = {};
+  lines.forEach(l => cnt[l.ym] = (cnt[l.ym] || 0) + 1);
+  const ym = +Object.keys(cnt).sort((a, b) => cnt[b] - cnt[a])[0];
+  const kept = lines.filter(l => l.ym === ym);
+  const dropped = lines.length - kept.length;
+
+  // rateio por pedido
+  const byOrder = new Map();
+  kept.forEach(l => { if (!byOrder.has(l.oid)) byOrder.set(l.oid, []); byOrder.get(l.oid).push(l); });
+  byOrder.forEach(ls => {
+    const w = ls.map(l => (l.unit > 0 ? l.unit : 1) * l.qty);
+    const sw = w.reduce((a, b) => a + b, 0);
+    ls.forEach((l, i) => {
+      const share = sw > 0 ? w[i] / sw : 1 / ls.length;
+      l.vProd = ls[0].oProd * share;
+      l.vTotal = ls[0].oTotal * share;
+      l.vFrete = ls[0].oFrete != null ? ls[0].oFrete * share : Math.max(0, l.vTotal - l.vProd);
+    });
+  });
+
+  const statuses = new Map();
+  kept.forEach(l => statuses.set(l.status, (statuses.get(l.status) || 0) + 1));
+  let last = kept[0].date;
+  kept.forEach(l => { if (l.date > last) last = l.date; });
+  const year = Math.floor(ym / 100), month = (ym % 100) - 1;
+  return { lines: kept, ym, year, month, dim: daysInMonth(year, month), lastDate: last, dropped, statuses, nOrders: byOrder.size, nRows: rows.length, cols: { prazo: K.prazo, motivo: K.motivo } };
+}
+
+/* Agrega vendas. o = {upTo, vkey, statusOk, canal(fn opcional)} */
+function agg(base, o) {
+  const res = { rev: 0, qty: 0, orders: new Set(), byDay: new Array(33).fill(0), canais: new Map(), skus: new Map() };
+  const up = o.upTo == null ? 99 : o.upTo;
+  base.lines.forEach(l => {
+    if (l.day > up || !o.statusOk.has(l.status)) return;
+    if (o.canal && !o.canal(l)) return;
+    const v = l[o.vkey];
+    res.rev += v; res.qty += l.qty; res.orders.add(l.oid); res.byDay[l.day] += v;
+    let c = res.canais.get(l.ck);
+    if (!c) { c = { mkt: l.mkt, conta: l.conta, rev: 0, qty: 0, orders: new Set() }; res.canais.set(l.ck, c); }
+    c.rev += v; c.qty += l.qty; c.orders.add(l.oid);
+    let s = res.skus.get(l.sku);
+    if (!s) { s = { sku: l.sku, title: l.title, rev: 0, qty: 0 }; res.skus.set(l.sku, s); }
+    if (!s.title && l.title) s.title = l.title;
+    s.rev += v; s.qty += l.qty;
+  });
+  return res;
+}
+
+/* Dias que devem entrar na comparação: dias fechados da base atual */
+function defaultN(cur) {
+  const d = cur.lastDate;
+  if (d.getDate() >= cur.dim) return cur.dim;
+  return d.getHours() >= 20 ? d.getDate() : Math.max(1, d.getDate() - 1);
+}
+
+function classify(r, c, tol) {
+  if (r <= 0 && c <= 0) return 'igual';
+  if (r <= 0) return 'novo';
+  if (c <= 0) return 'parou';
+  const p = (c - r) / r;
+  if (Math.abs(p) <= tol / 100) return 'igual';
+  return p > 0 ? 'melhor' : 'pior';
+}
+
+function compare(ref, cur, s) {
+  const o = { vkey: s.vkey, statusOk: s.statusOk };
+  const N = s.N;
+  const refFull = agg(ref, { ...o, upTo: 99 });
+  const refN = agg(ref, { ...o, upTo: N });
+  const curN = agg(cur, { ...o, upTo: N });
+  const linear = curN.rev / N * cur.dim;
+  const profile = refN.rev > 0 ? curN.rev * refFull.rev / refN.rev : null;
+  const restDays = cur.dim - N;
+  const need = restDays > 0 ? Math.max(0, refFull.rev - curN.rev) / restDays : 0;
+
+  const keys = new Set([...refFull.canais.keys(), ...refN.canais.keys(), ...curN.canais.keys()]);
+  const canais = [];
+  keys.forEach(k => {
+    const a = refN.canais.get(k), b = curN.canais.get(k), f = refFull.canais.get(k);
+    const any = a || b || f;
+    canais.push({
+      key: k, mkt: any.mkt, conta: any.conta,
+      refN: a ? a.rev : 0, curN: b ? b.rev : 0, refFull: f ? f.rev : 0,
+      refOrders: a ? a.orders.size : 0, curOrders: b ? b.orders.size : 0,
+      proj: (b ? b.rev : 0) / N * cur.dim
+    });
+  });
+  const groups = new Map();
+  canais.forEach(c => {
+    let g = groups.get(c.mkt);
+    if (!g) { g = { mkt: c.mkt, refN: 0, curN: 0, refFull: 0, proj: 0, refOrders: 0, curOrders: 0, contas: [] }; groups.set(c.mkt, g); }
+    ['refN', 'curN', 'refFull', 'proj', 'refOrders', 'curOrders'].forEach(f => g[f] += c[f]);
+    g.contas.push(c);
+  });
+  const mkts = [...groups.values()].sort((a, b) => b.curN - a.curN || b.refN - a.refN);
+  mkts.forEach(g => g.contas.sort((a, b) => b.curN - a.curN || b.refN - a.refN));
+
+  return { N, refFull, refN, curN, linear, profile, restDays, need, mkts, canais };
+}
+
+function compareItems(ref, cur, s, canalFn) {
+  const o = { vkey: s.vkey, statusOk: s.statusOk, upTo: s.N, canal: canalFn };
+  const a = agg(ref, o), b = agg(cur, o);
+  const keys = new Set([...a.skus.keys(), ...b.skus.keys()]);
+  const items = [];
+  keys.forEach(k => {
+    const x = a.skus.get(k), y = b.skus.get(k);
+    const r = { sku: k, title: (y && y.title) || (x && x.title) || '', refRev: x ? x.rev : 0, refQty: x ? x.qty : 0, curRev: y ? y.rev : 0, curQty: y ? y.qty : 0 };
+    r.dRev = r.curRev - r.refRev; r.dQty = r.curQty - r.refQty;
+    const m = s.metric === 'qty';
+    r.status = classify(m ? r.refQty : r.refRev, m ? r.curQty : r.curRev, s.tol);
+    items.push(r);
+  });
+  return items;
+}
+
+
+/* ===== INTERFACE ===== */
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+const brl = n => (Math.round(n) < 0 ? '−' : '') + Math.abs(Math.round(n)).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
+const sbrl = n => Math.round(n) === 0 ? 'R$ 0' : (n > 0 ? '+' : '−') + Math.abs(Math.round(n)).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
+const int = n => Math.round(n).toLocaleString('pt-BR');
+const sint = n => n === 0 ? '0' : (n > 0 ? '+' : '−') + Math.abs(Math.round(n)).toLocaleString('pt-BR');
+const pctTxt = (c, r) => r > 0 ? ((c - r) / r >= 0 ? '+' : '−') + (Math.abs((c - r) / r) * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + '%' : '—';
+const cls = d => d > 0.5 ? 'up' : d < -0.5 ? 'down' : 'flat';
+const mesNome = b => MESES[b.month] + '/' + b.year;
+const dm = d => String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0');
+const hm = d => dm(d) + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+const BADGE = { pior: 'Pior', melhor: 'Melhor', igual: 'Igual', novo: 'Novo', parou: 'Parou' };
+
+const S = { ref: null, cur: null, ref_name: '', cur_name: '', vkey: 'vTotal', N: null, nTouched: false, tol: 5, statusOk: new Set(), allStatus: [],
+  tab: 'canal', metric: 'rev', q: '', fstat: new Set(), canal: 'all', sort: 'down', limit: 150, chart: null };
+
+/* --- leitura dos arquivos --- */
+function setupDrop(id, which) {
+  const box = $(id), input = box.querySelector('input');
+  input.addEventListener('change', () => input.files[0] && handleFile(which, input.files[0], box));
+  ['dragenter', 'dragover'].forEach(e => box.addEventListener(e, ev => { ev.preventDefault(); box.classList.add('over'); }));
+  ['dragleave', 'drop'].forEach(e => box.addEventListener(e, ev => { ev.preventDefault(); box.classList.remove('over'); }));
+  box.addEventListener('drop', ev => { const f = ev.dataTransfer.files[0]; if (f) handleFile(which, f, box); });
+}
+function handleFile(which, file, box) {
+  const info = box.querySelector('[data-info]'), hint = box.querySelector('[data-hint]');
+  box.classList.remove('ok'); hint.style.display = 'none';
+  info.innerHTML = '<div class="meta">Lendo ' + esc(file.name) + '…</div>';
+  setTimeout(() => {
+    file.arrayBuffer().then(buf => {
+      const wb = XLSX.read(buf, { type: 'array', cellDates: false });
+      const name = wb.SheetNames.find(n => strip(n) === 'DADOS') || wb.SheetNames[0];
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[name], { defval: null });
+      const base = prepare(rows);
+      S[which] = base; S[which + '_name'] = file.name;
+      box.classList.add('ok');
+      info.innerHTML = '<div class="meta"><b>' + esc(file.name) + '</b><br>' + MESES[base.month] + ' de ' + base.year + ' · ' + int(base.nOrders) + ' pedidos · último pedido em ' + hm(base.lastDate) +
+        (base.dropped ? '<br><span class="note">' + int(base.dropped) + ' linhas de outros meses foram ignoradas.</span>' : '') + '</div>';
+      onBasesChanged(which);
+    }).catch(err => {
+      S[which] = null; hint.style.display = '';
+      info.innerHTML = '<div class="err">Não consegui usar esse arquivo. ' + esc(err.message || err) + '</div>';
+      onBasesChanged(which);
+    });
+  }, 30);
+}
+
+function setChannels() {
+  const acc = new Map(); [S.ref, S.cur].forEach(b => b && b.lines.forEach(l => { if (!acc.has(l.mkt)) acc.set(l.mkt, new Set()); acc.get(l.mkt).add(l.conta); }));
+  [S.ref, S.cur].forEach(b => b && b.lines.forEach(l => { l.ch = acc.get(l.mkt).size > 1 ? (strip(l.conta).startsWith(strip(l.mkt)) ? l.conta : l.mkt + ' — ' + l.conta) : l.mkt; }));
+}
+function onBasesChanged(which) {
+  setChannels();
+  const st = new Map();
+  [S.ref, S.cur].forEach(b => b && b.statuses.forEach((n, k) => st.set(k, (st.get(k) || 0) + n)));
+  S.allStatus = [...st.keys()].sort((a, b) => st.get(b) - st.get(a));
+  S.statusOk = new Set(S.allStatus.filter(s => !/cancel|devolv|retorn|return/i.test(s)));
+  if (S.cur && (!S.nTouched || which === 'cur')) { S.N = defaultN(S.cur); S.nTouched = false; }
+  if (S.ref && S.cur) { $('#adj').hidden = false; buildSettings(); render(); }
+  else { $('#adj').hidden = true; $('#out').style.display = 'none'; }
+}
+
+function buildSettings() {
+  $('#sN').max = S.cur.dim; $('#sN').value = S.N;
+  $('#sStatus').innerHTML = S.allStatus.map(s => '<label class="chip ' + (S.statusOk.has(s) ? 'on' : '') + '"><input type="checkbox" data-st="' + esc(s) + '"' + (S.statusOk.has(s) ? ' checked' : '') + '> ' + esc(s) + '</label>').join('');
+  $('#sStatus').querySelectorAll('input').forEach(i => i.addEventListener('change', () => {
+    i.checked ? S.statusOk.add(i.dataset.st) : S.statusOk.delete(i.dataset.st);
+    i.parentElement.classList.toggle('on', i.checked); render();
+  }));
+  const d = S.cur.lastDate;
+  $('#nDayNote').textContent = 'Último pedido da base atual: ' + hm(d) + '. O dia só entra como fechado se o último pedido for depois das 20h, para não puxar a projeção para baixo com um dia pela metade.';
+}
+$('#sVal').addEventListener('change', e => { S.vkey = e.target.value; render(); });
+$('#sN').addEventListener('change', e => { const v = Math.max(1, Math.min(S.cur ? S.cur.dim : 31, parseInt(e.target.value) || 1)); S.N = v; S.nTouched = true; e.target.value = v; render(); });
+$('#sTol').addEventListener('change', e => { S.tol = Math.max(0, parseFloat(e.target.value) || 0); render(); });
+
+/* --- renderização --- */
+let M = null;
+function render() {
+  if (!S.ref || !S.cur) return;
+  const s = { vkey: S.vkey, statusOk: S.statusOk, N: S.N, tol: S.tol, metric: S.metric };
+  M = compare(S.ref, S.cur, s);
+  $('#out').style.display = 'block';
+  $('#adjSummary').textContent = 'dias 1 a ' + S.N + ' · ' + (S.vkey === 'vProd' ? 'valor dos produtos' : 'total do pedido');
+  renderLedger(); renderChart(); renderCanalTable(); buildCanalSelect(); renderItems(); renderQueda(); renderCancel();
+}
+
+function renderLedger() {
+  const r = S.ref, c = S.cur, N = S.N;
+  const d = M.curN.rev - M.refN.rev;
+  const fecha = c.dim === N;
+  const bate = M.refFull.rev > 0 ? (fecha ? M.curN.rev : M.linear) / M.refFull.rev - 1 : 0;
+  let cell4;
+  if (fecha) cell4 = '<div class="lb">Mês fechado</div><div class="big num ' + cls(M.curN.rev - M.refFull.rev) + '">' + sbrl(M.curN.rev - M.refFull.rev) + '</div><div class="ln">contra o mês de referência inteiro</div>';
+  else if (M.curN.rev >= M.refFull.rev) cell4 = '<div class="lb">Para bater o mês de referência</div><div class="big num up">Já bateu</div><div class="ln">passou de ' + brl(M.refFull.rev) + ' com ' + M.restDays + ' dias ainda pela frente</div>';
+  else cell4 = '<div class="lb">Para bater o mês de referência</div><div class="big num">' + brl(M.need) + '<span style="font-size:14px;font-weight:500;color:var(--muted)"> por dia</span></div><div class="ln">nos ' + M.restDays + ' dias que faltam · hoje faz <b>' + brl(M.curN.rev / N) + '</b> por dia</div>';
+  $('#ledger').innerHTML =
+    '<div class="cell"><div class="lb"><span class="dot" style="background:var(--ref)"></span>' + esc(mesNome(r)) + ' (referência)</div><div class="big num">' + brl(M.refFull.rev) + '</div><div class="ln">mês inteiro · até o dia ' + N + ': <b class="num">' + brl(M.refN.rev) + '</b></div></div>' +
+    '<div class="cell"><div class="lb"><span class="dot" style="background:var(--cur)"></span>' + esc(mesNome(c)) + ' até o dia ' + N + '</div><div class="big num">' + brl(M.curN.rev) + '</div><div class="ln"><b class="' + cls(d) + ' num">' + sbrl(d) + ' (' + pctTxt(M.curN.rev, M.refN.rev) + ')</b> na mesma janela da referência</div></div>' +
+    '<div class="cell"><div class="lb">Projeção de fechamento de ' + esc(MESES[c.month]) + '</div><div class="big num">' + brl(fecha ? M.curN.rev : M.linear) + '</div><div class="ln">' + (fecha ? 'mês completo' : '<b class="num">' + brl(M.curN.rev / N) + '</b>/dia × <b>' + c.dim + ' dias</b> de ' + esc(MESES[c.month]) + ' (' + N + ' dias fechados) · <b class="' + cls(bate) + ' num">' + (bate >= 0 ? '+' : '−') + (Math.abs(bate) * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + '%</b> contra a referência') + '</div>' +
+      (!fecha && M.profile != null ? '<div class="ln">pelo perfil do mês de referência: <b class="num">' + brl(M.profile) + '</b></div>' : '') + '</div>' +
+    '<div class="cell">' + cell4 + '</div>';
+  const same = r.ym === c.ym;
+  $('#banner').innerHTML = same ? '<div class="banner warn">As duas bases são do mesmo mês (' + esc(mesNome(r)) + '). Confira se não enviou o mesmo arquivo nos dois campos.</div>' :
+    (c.dim !== N ? '<div class="banner">Comparando os dias 1 a ' + N + ' dos dois meses. O mês atual ainda não fechou, então “pior” ou “melhor” sempre olha a mesma janela de dias.</div>' : '');
+}
+
+function cssv(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+function renderChart() {
+  const r = S.ref, c = S.cur, N = S.N, D = Math.max(r.dim, c.dim);
+  const labels = Array.from({ length: D }, (_, i) => i + 1);
+  const cum = (byDay, upTo) => { let a = 0; return labels.map(d => d <= upTo ? (a += byDay[d]) : null); };
+  const refSet = cum(M.refFull.byDay, r.dim);
+  const curAll = agg(c, { vkey: S.vkey, statusOk: S.statusOk, upTo: N });
+  const curSet = cum(curAll.byDay, N);
+  const curN = curSet[N - 1] || 0;
+  const proj = labels.map(d => d >= N && d <= c.dim ? curN + (curN / N) * (d - N) : null);
+  $('#lgRef').textContent = mesNome(r); $('#lgCur').textContent = mesNome(c);
+  if (S.chart) S.chart.destroy();
+  const ink = cssv('--muted'), line = cssv('--line');
+  S.chart = new Chart($('#chart'), {
+    type: 'line',
+    data: { labels, datasets: [
+      { label: mesNome(r), data: refSet, borderColor: cssv('--ref'), borderWidth: 2.2, pointRadius: 0, tension: 0.15, spanGaps: false },
+      { label: mesNome(c), data: curSet, borderColor: cssv('--cur'), borderWidth: 2.6, pointRadius: 0, tension: 0.15 },
+      { label: 'Projeção', data: proj, borderColor: cssv('--cur'), borderWidth: 2, borderDash: [5, 5], pointRadius: 0 }
+    ] },
+    options: { responsive: true, maintainAspectRatio: false, animation: false, interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { display: false }, tooltip: { callbacks: { title: i => 'Dia ' + i[0].label, label: x => x.parsed.y == null ? null : x.dataset.label + ': ' + brl(x.parsed.y) } } },
+      scales: { x: { ticks: { color: ink, maxTicksLimit: 16 }, grid: { display: false }, title: { display: true, text: 'Dia do mês', color: ink } },
+        y: { ticks: { color: ink, callback: v => 'R$ ' + (v >= 1e6 ? (v / 1e6).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' mi' : (v / 1e3).toLocaleString('pt-BR') + ' mil') }, grid: { color: line }, beginAtZero: true } } }
+  });
+}
+
+function pctCell(a, b) { const d = b - a; return '<span class="' + cls(d) + '">' + pctTxt(b, a) + '</span>'; }
+function canalRow(kind, label, x, extra) {
+  const d = x.curN - x.refN;
+  const pj = x.refFull > 0 ? pctTxt(x.proj, x.refFull) : '—';
+  return '<tr class="' + kind + '"><td>' + label + (extra || '') + '</td>' +
+    '<td class="num">' + brl(x.refN) + '<small>' + int(x.refOrders) + ' pedidos</small></td>' +
+    '<td class="num">' + brl(x.curN) + '<small>' + int(x.curOrders) + ' pedidos</small></td>' +
+    '<td class="num ' + cls(d) + '">' + sbrl(d) + '</td><td class="num">' + pctCell(x.refN, x.curN) + '</td>' +
+    '<td class="num">' + brl(x.refFull) + '</td>' +
+    '<td class="num">' + brl(x.proj) + '<small class="' + (x.refFull > 0 ? cls(x.proj - x.refFull) : '') + '">' + pj + ' vs. mês ref.</small></td></tr>';
+}
+function renderCanalTable() {
+  const N = S.N;
+  let h = '<thead><tr><th>Canal</th><th>' + esc(mesNome(S.ref)) + ' até dia ' + N + '</th><th>' + esc(mesNome(S.cur)) + ' até dia ' + N + '</th><th>Diferença</th><th>%</th><th>' + esc(mesNome(S.ref)) + ' inteiro</th><th>Projeção do mês</th></tr></thead><tbody>';
+  const tot = { refN: 0, curN: 0, refFull: 0, proj: 0, refOrders: 0, curOrders: 0 };
+  M.mkts.forEach(g => {
+    ['refN', 'curN', 'refFull', 'proj', 'refOrders', 'curOrders'].forEach(f => tot[f] += g[f]);
+    if (g.contas.length === 1) h += canalRow('mk', esc(g.mkt), g, ' <span style="font-weight:400;color:var(--muted)">· ' + esc(g.contas[0].conta) + '</span>');
+    else { h += canalRow('mk', esc(g.mkt), g); g.contas.forEach(c => h += canalRow('ac', esc(c.conta), c)); }
+  });
+  h += canalRow('tot', 'Total', tot) + '</tbody>';
+  $('#tCanal').innerHTML = h;
+
+  // canais que mais caíram
+  const losses = M.canais.filter(c => c.curN - c.refN < -0.5).sort((a, b) => (a.curN - a.refN) - (b.curN - b.refN)).slice(0, 6);
+  const max = losses.length ? Math.abs(losses[0].curN - losses[0].refN) : 1;
+  $('#lossCanalNote').textContent = 'Diferença em R$ nos dias 1 a ' + N + ', conta por conta.';
+  $('#lossCanal').innerHTML = losses.length ? losses.map(c => { const d = c.curN - c.refN; return '<li><span class="nm">' + esc(c.mkt) + ' <small>· ' + esc(c.conta) + '</small></span><span class="vl down num">' + sbrl(d) + ' <small style="font-weight:400">(' + pctTxt(c.curN, c.refN) + ')</small></span><span class="bar"><span style="width:' + Math.max(3, Math.abs(d) / max * 100) + '%"></span></span></li>'; }).join('') : '<li class="empty">Nenhum canal está abaixo da referência. 🎉</li>';
+}
+
+function buildCanalSelect() {
+  const sel = $('#iCanal'), keep = S.canal;
+  let h = '<option value="all">Todos os canais</option>';
+  M.mkts.forEach(g => {
+    h += '<option value="m:' + esc(g.mkt) + '">' + esc(g.mkt) + (g.contas.length > 1 ? ' (todas as contas)' : '') + '</option>';
+    if (g.contas.length > 1) g.contas.forEach(c => h += '<option value="c:' + esc(c.key) + '">&nbsp;&nbsp;' + esc(g.mkt) + ' — ' + esc(c.conta) + '</option>');
+  });
+  sel.innerHTML = h;
+  if ([...sel.options].some(o => o.value === keep)) sel.value = keep; else { S.canal = 'all'; sel.value = 'all'; }
+}
+function canalFn() {
+  if (S.canal === 'all') return null;
+  const v = S.canal.slice(2);
+  return S.canal[0] === 'm' ? l => l.mkt === v : l => l.ck === v;
+}
+
+function renderItems() {
+  const s = { vkey: S.vkey, statusOk: S.statusOk, N: S.N, tol: S.tol, metric: S.metric };
+  const all = compareItems(S.ref, S.cur, s, canalFn());
+  const qty = S.metric === 'qty';
+  const cnt = { pior: 0, melhor: 0, igual: 0, novo: 0, parou: 0 };
+  all.forEach(i => cnt[i.status]++);
+  let neg = 0, pos = 0; all.forEach(i => i.dRev < 0 ? neg += i.dRev : pos += i.dRev);
+  $('#itemSum').innerHTML = '<b>' + all.length + '</b> itens vendidos em pelo menos um dos meses. Os que pioraram perderam <b class="down num">' + sbrl(neg) + '</b>, os que melhoraram ganharam <b class="up num">' + sbrl(pos) + '</b>, saldo de <b class="' + cls(neg + pos) + ' num">' + sbrl(neg + pos) + '</b>.';
+  $('#iChips').innerHTML = Object.keys(BADGE).map(k => '<button class="fchip" data-k="' + k + '" aria-pressed="' + S.fstat.has(k) + '">' + BADGE[k] + ' · ' + cnt[k] + '</button>').join('');
+  $('#iChips').querySelectorAll('button').forEach(b => b.addEventListener('click', () => { S.fstat.has(b.dataset.k) ? S.fstat.delete(b.dataset.k) : S.fstat.add(b.dataset.k); S.limit = 150; renderItems(); }));
+
+  let items = all;
+  if (S.fstat.size) items = items.filter(i => S.fstat.has(i.status));
+  if (S.q.trim()) { const q = strip(S.q); items = items.filter(i => strip(i.title).includes(q) || strip(i.sku).includes(q)); }
+  const dk = qty ? 'dQty' : 'dRev', ck = qty ? 'curQty' : 'curRev', rk = qty ? 'refQty' : 'refRev';
+  const sorters = { down: (a, b) => a[dk] - b[dk], up: (a, b) => b[dk] - a[dk], cur: (a, b) => b[ck] - a[ck], ref: (a, b) => b[rk] - a[rk] };
+  items = items.slice().sort(sorters[S.sort]);
+
+  const cell = (rev, q) => qty ? '<td class="num">' + int(q) + ' un.<small>' + brl(rev) + '</small></td>' : '<td class="num">' + brl(rev) + '<small>' + int(q) + ' un.</small></td>';
+  let h = '<thead><tr><th>Item</th><th>Situação</th><th>' + esc(mesNome(S.ref)) + ' até dia ' + S.N + '</th><th>' + esc(mesNome(S.cur)) + ' até dia ' + S.N + '</th><th>Diferença</th></tr></thead><tbody>';
+  items.slice(0, S.limit).forEach(i => {
+    const d = i[dk];
+    h += '<tr><td class="item"><span class="t">' + esc(i.title || '(sem título)') + '</span><small>SKU ' + esc(i.sku) + '</small></td>' +
+      '<td><span class="badge b-' + i.status + '">' + BADGE[i.status] + '</span></td>' +
+      cell(i.refRev, i.refQty) + cell(i.curRev, i.curQty) +
+      '<td class="num ' + cls(d) + '">' + (qty ? sint(d) + ' un.' : sbrl(d)) + '<small>' + pctTxt(i[ck], i[rk]) + (qty ? ' · ' + sbrl(i.dRev) : ' · ' + sint(i.dQty) + ' un.') + '</small></td></tr>';
+  });
+  if (!items.length) h += '<tr><td colspan="5" class="empty" style="text-align:center">Nenhum item com esses filtros.</td></tr>';
+  h += '</tbody>';
+  if (items.length) {
+    const T = items.reduce((t, i) => { t.rr += i.refRev; t.cr += i.curRev; t.rq += i.refQty; t.cq += i.curQty; return t; }, { rr: 0, cr: 0, rq: 0, cq: 0 });
+    const dT = qty ? T.cq - T.rq : T.cr - T.rr, ckT = qty ? T.cq : T.cr, rkT = qty ? T.rq : T.rr;
+    h += '<tfoot><tr class="tot"><td class="item"><span class="t">TOTAL</span><small>' + int(items.length) + ' itens com os filtros atuais' + (items.length > S.limit ? ' (inclui os não exibidos)' : '') + '</small></td><td></td>' +
+      cell(T.rr, T.rq) + cell(T.cr, T.cq) +
+      '<td class="num ' + cls(dT) + '">' + (qty ? sint(dT) + ' un.' : sbrl(dT)) + '<small>' + pctTxt(ckT, rkT) + (qty ? ' · ' + sbrl(T.cr - T.rr) : ' · ' + sint(T.cq - T.rq) + ' un.') + '</small></td></tr></tfoot>';
+  }
+  $('#tItem').innerHTML = h;
+  const more = $('#iMore'); more.hidden = items.length <= S.limit; more.textContent = 'Mostrar mais (' + (items.length - S.limit) + ' restantes)';
+
+  // itens que mais caíram (sempre sobre todos os canais da seleção de canal, em R$)
+  const loss = all.filter(i => i.dRev < -0.5).sort((a, b) => a.dRev - b.dRev).slice(0, 8);
+  const mx = loss.length ? Math.abs(loss[0].dRev) : 1;
+  $('#lossItemNote').textContent = (S.canal === 'all' ? 'Todos os canais' : 'Canal filtrado na aba “Por item”') + ', diferença em R$ nos dias 1 a ' + S.N + '.';
+  $('#lossItem').innerHTML = loss.length ? loss.map(i => '<li><span class="nm" title="' + esc(i.title) + '">' + esc(i.title || 'SKU ' + i.sku) + ' <small>· ' + esc(i.sku) + '</small></span><span class="vl down num">' + sbrl(i.dRev) + ' <small style="font-weight:400">(' + (i.status === 'parou' ? 'parou' : pctTxt(i.curRev, i.refRev)) + ')</small></span><span class="bar"><span style="width:' + Math.max(3, Math.abs(i.dRev) / mx * 100) + '%"></span></span></li>').join('') : '<li class="empty">Nenhum item está abaixo da referência.</li>';
+}
+
+/* --- eventos da aba de itens --- */
+$('#iQ').addEventListener('input', e => { S.q = e.target.value; S.limit = 150; renderItems(); });
+$('#iCanal').addEventListener('change', e => { S.canal = e.target.value; S.limit = 150; renderItems(); });
+$('#iSort').addEventListener('change', e => { S.sort = e.target.value; renderItems(); });
+$('#iMore').addEventListener('click', () => { S.limit += 150; renderItems(); });
+function setMetric(m) { S.metric = m; $('#mRev').setAttribute('aria-pressed', m === 'rev'); $('#mQty').setAttribute('aria-pressed', m === 'qty'); renderItems(); }
+$('#mRev').addEventListener('click', () => setMetric('rev'));
+$('#mQty').addEventListener('click', () => setMetric('qty'));
+function setTab(t) {
+  S.tab = t;
+  $('#tabCanal').setAttribute('aria-selected', t === 'canal'); $('#tabItem').setAttribute('aria-selected', t === 'item');
+  $('#paneCanal').hidden = t !== 'canal'; $('#paneItem').hidden = t !== 'item';
+}
+$('#tabCanal').addEventListener('click', () => setTab('canal'));
+$('#tabItem').addEventListener('click', () => setTab('item'));
+
+/* ===== ABAS: POR QUE CAIU / CANCELAMENTOS ===== */
+const f1 = n => n.toLocaleString('pt-BR', { maximumFractionDigits: 1 });
+const sg = n => (n >= 0 ? '+' : '−') + f1(Math.abs(n));
+const isCanc = s => /cancel/i.test(s);
+const isOpen = s => !/cancel|devolv|retorn|return|entreg|conclu|finaliz|deliver/i.test(s);
+const RS = { preco: ['Preço', 'r-preco'], frete: ['Frete', 'r-frete'], prazo: ['Prazo de entrega', 'r-prazo'], parou: ['Sem venda no período', 'r-outro'], outro: ['Sem causa nos dados', 'r-outro'] };
+S.qR = 'all'; S.qC = 'all'; S.qL = 60;
+
+function aggBy(base, s, up, kf) {
+  const m = new Map();
+  base.lines.forEach(l => {
+    if (l.day > up || !s.statusOk.has(l.status)) return;
+    const k = kf(l); let a = m.get(k);
+    if (!a) { a = { rev: 0, qty: 0, prod: 0, fr: 0, pz: 0, pzn: 0, sku: l.sku, title: l.title, mkt: l.ch }; m.set(k, a); }
+    a.rev += l[s.vkey]; a.qty += l.qty; a.prod += l.vProd; a.fr += l.vFrete;
+    if (l.prazo != null) { a.pz += l.prazo; a.pzn++; }
+    if (!a.title && l.title) a.title = l.title;
+  });
+  return m;
+}
+/* Motivo principal: o fator que mais piorou em relação ao seu limite (preço 3%, frete 2 p.p. do pedido, prazo 1 dia) */
+function reasonOf(x, y) {
+  if (!y || y.rev <= 0) return { k: 'parou', t: 'Sem nenhuma venda neste mês' };
+  const p0 = x.prod / x.qty, p1 = y.prod / y.qty, dp = p0 > 0 ? (p1 / p0 - 1) * 100 : 0;
+  const f0 = 100 * x.fr / (x.prod || 1), f1v = 100 * y.fr / (y.prod || 1), df = f1v - f0;
+  const hz = x.pzn && y.pzn, z0 = hz ? x.pz / x.pzn : 0, z1 = hz ? y.pz / y.pzn : 0, dz = z1 - z0;
+  const top = [['preco', dp / 3], ['frete', df / 2], ['prazo', hz ? dz : 0]].sort((a, b) => b[1] - a[1])[0];
+  if (top[1] < 1) return { k: 'outro', t: 'Preço, frete e prazo estáveis: pode ser demanda, concorrência, estoque ou anúncio' };
+  const t = { preco: 'R$ ' + f1(p0) + ' → R$ ' + f1(p1) + ' por un. (' + sg(dp) + '%)', frete: 'Frete ' + f1(f0) + '% → ' + f1(f1v) + '% do pedido', prazo: 'Prazo ' + f1(z0) + ' → ' + f1(z1) + ' dias' };
+  return { k: top[0], t: t[top[0]] };
+}
+
+const ACT = { preco: 'Revisar o preço: subiu e as unidades caíram. Teste voltar ao valor da referência.', frete: 'O frete pesa mais no pedido. Renegociar a tabela/transportadora ou absorver parte do frete.', prazo: 'O prazo de entrega aumentou. Checar estoque, tempo de despacho e transportadora.', parou: 'Vendeu na referência e não vendeu agora. Conferir se o anúncio está ativo, com estoque e sem bloqueio (ou se é só pouco volume).', outro: 'Preço, frete e prazo não mudaram: olhar concorrência, posição do anúncio, estoque e sazonalidade.' };
+function renderQueda() {
+  const s = { vkey: S.vkey, statusOk: S.statusOk }, N = S.N, kf = l => l.sku + '||' + l.ch;
+  const A = aggBy(S.ref, s, N, kf), B = aggBy(S.cur, s, N, kf), rows = [], tot = { preco: 0, frete: 0, prazo: 0, parou: 0, outro: 0 }, bm = new Map();
+  A.forEach((x, k) => {
+    const y = B.get(k), d = (y ? y.rev : 0) - x.rev;
+    if (x.rev <= 0 || d > -0.5 || d / x.rev > -S.tol / 100) return;
+    const r = reasonOf(x, y); rows.push({ x, y, d, r }); tot[r.k] += d;
+    let g = bm.get(x.mkt); if (!g) { g = { loss: 0, rs: { preco: 0, frete: 0, prazo: 0, parou: 0, outro: 0 }, rows: [] }; bm.set(x.mkt, g); }
+    g.loss += d; g.rs[r.k] += d; g.rows.push({ x, y, d, r });
+  });
+  const sum = Object.values(tot).reduce((a, b) => a + b, 0), keys = Object.keys(RS).sort((a, b) => tot[a] - tot[b]);
+  const MA = aggBy(S.ref, s, N, l => l.ch), MB = aggBy(S.cur, s, N, l => l.ch);
+  const chg = m => { const x = MA.get(m), y = MB.get(m); if (!x || !y || !x.qty || !y.qty) return '';
+    let t = 'Médias do canal: preço/un. R$ ' + f1(x.prod / x.qty) + ' → R$ ' + f1(y.prod / y.qty) + ' · frete ' + f1(100 * x.fr / (x.prod || 1)) + '% → ' + f1(100 * y.fr / (y.prod || 1)) + '% do pedido';
+    if (x.pzn && y.pzn) t += ' · prazo ' + f1(x.pz / x.pzn) + ' → ' + f1(y.pz / y.pzn) + ' dias'; return t; };
+  const drop = M.refN.rev - M.curN.rev, k0 = keys[0], k1 = keys[1];
+  let h = '<div class="v3">';
+  if (!S.ref.cols.prazo || !S.cur.cols.prazo) h += '<div class="banner warn">Não achei coluna de <b>prazo de entrega</b> nas bases (procuro nomes com “prazo” ou “data…entrega”). Sem ela o diagnóstico só enxerga preço e frete. Se a coluna existe com outro nome, me diga qual.</div>';
+  if (N < 7) h += '<div class="banner warn">Só <b>' + N + ' dia(s)</b> fechado(s) no mês atual. Com tão pouco período, a queda por item oscila muito (um item com 1 venda na referência aparece como “sem venda”). Use como pista; a leitura fica confiável a partir de uns 7 dias. Os cancelamentos usam também o histórico de julho, então já são mais sólidos.</div>';
+  h += '<div class="panel"><h2>Resumo</h2><p style="margin:6px 0 0;font-size:16px">Nos dias 1 a ' + N + ' você vendeu <b>' + brl(M.curN.rev) + '</b> contra ' + brl(M.refN.rev) + ' da referência (<b class="' + cls(-drop) + '">' + pctTxt(M.curN.rev, M.refN.rev) + '</b>). ' +
+    (sum < 0 ? int(rows.length) + ' combinações item × canal caíram, somando <b class="down">' + sbrl(sum) + '</b>. O maior motivo é <b>' + RS[k0][0] + '</b> (' + f1(100 * tot[k0] / sum) + '% da queda, ' + sbrl(tot[k0]) + ')' + (tot[k1] < 0 ? ', seguido de <b>' + RS[k1][0] + '</b> (' + f1(100 * tot[k1] / sum) + '%)' : '') + '.' : 'Nenhum item caiu de forma relevante.') + '</p>' +
+    (sum < 0 ? '<div class="stack" style="margin-top:12px">' + keys.filter(k => tot[k] < 0).map(k => '<span class="badge ' + RS[k][1] + '" style="margin:0 6px 6px 0">' + RS[k][0] + ' · ' + sbrl(tot[k]) + ' · ' + f1(100 * tot[k] / sum) + '%</span>').join('') + '</div>' : '') + '</div>';
+  h += '<div class="dxg">' + [...bm.entries()].sort((a, b) => a[1].loss - b[1].loss).slice(0, 8).map(([m, g]) => {
+    const mk = Object.keys(g.rs).sort((a, b) => g.rs[a] - g.rs[b])[0];
+    return '<div class="dx"><div class="dxh"><b>' + esc(m) + '</b><span class="down num">' + sbrl(g.loss) + '</span></div><div><span class="badge ' + RS[mk][1] + '">' + RS[mk][0] + '</span> responde por <b>' + f1(100 * g.rs[mk] / g.loss) + '%</b> da queda deste canal</div><div class="note" style="margin-top:6px">' + chg(m) + '</div><div class="act"><b>O que fazer:</b> ' + ACT[mk] + '</div><div class="note" style="margin:10px 0 2px">Itens que mais pesaram:</div><ul class="loss-list">' +
+      g.rows.sort((a, b) => a.d - b.d).slice(0, 3).map(r => '<li><span class="nm" title="' + esc(r.x.title) + '">' + esc(r.x.title || 'SKU ' + r.x.sku) + '</span><span class="vl down num">' + sbrl(r.d) + '</span><span class="note" style="grid-column:1/-1">' + RS[r.r.k][0] + ': ' + esc(r.r.t) + ' · unidades ' + int(r.x.qty) + ' → ' + int(r.y ? r.y.qty : 0) + '</span></li>').join('') + '</ul></div>';
+  }).join('') + '</div>';
+  h += '<details class="adj" style="margin-top:0"><summary>Ver todos os itens que caíram <span>' + rows.length + ' itens</span></summary><div class="adj-body"><div class="tscroll"><table><thead><tr><th>Item</th><th style="text-align:left">Canal</th><th style="text-align:left">Motivo</th><th>Queda</th></tr></thead><tbody>' +
+    rows.sort((a, b) => a.d - b.d).slice(0, 80).map(r => '<tr><td class="item"><span class="t">' + esc(r.x.title || '(sem título)') + '</span><small>SKU ' + esc(r.x.sku) + '</small></td><td style="text-align:left">' + esc(r.x.mkt) + '</td><td style="text-align:left"><span class="badge ' + RS[r.r.k][1] + '">' + RS[r.r.k][0] + '</span><small>' + esc(r.r.t) + '</small></td><td class="num down">' + sbrl(r.d) + '<small>' + brl(r.x.rev) + ' → ' + brl(r.y ? r.y.rev : 0) + '</small></td></tr>').join('') + '</tbody></table></div></div></details></div>';
+  $('#vQueda').innerHTML = h;
+}
+
+/* ===== CANCELAMENTOS: pedido a pedido ===== */
+function buildOrders() {
+  const out = [];
+  [S.ref, S.cur].forEach((b, bi) => {
+    const m = new Map();
+    b.lines.forEach(l => {
+      let o = m.get(l.oid);
+      if (!o) { o = { id: l.oid, bi, day: l.day, date: l.date, mkt: l.ch, status: l.status, z: null, fr: (l.oFrete != null ? l.oFrete : Math.max(0, l.oTotal - l.oProd)) / (l.oProd || 1) * 100, val: l.oTotal, bv: -1, sku: l.sku, title: l.title, mot: '' }; m.set(l.oid, o); }
+      if (l.prazo != null && o.z == null) o.z = l.prazo;
+      if (l.vTotal > o.bv) { o.bv = l.vTotal; o.sku = l.sku; o.title = l.title; }
+      if (l.motivo && isCanc(l.status)) o.mot = l.motivo;
+    });
+    m.forEach(o => { o.c = isCanc(o.status); o.k = o.sku + '||' + o.mkt; out.push(o); });
+  });
+  return out;
+}
+const zb = z => z == null ? -1 : z <= 3 ? 0 : z <= 7 ? 1 : z <= 14 ? 2 : 3, fb = f => f < 10 ? 0 : f < 20 ? 1 : 2;
+const ZL = ['prazo até 3 dias', 'prazo de 4 a 7 dias', 'prazo de 8 a 14 dias', 'prazo acima de 14 dias'], FL = ['frete abaixo de 10% do pedido', 'frete de 10% a 20%', 'frete acima de 20% do pedido'];
+function bands(O, fn, nb) { const a = Array.from({ length: nb }, () => ({ n: 0, c: 0 })); O.forEach(o => { const b = fn(o); if (b < 0) return; a[b].n++; if (o.c) a[b].c++; }); return a; }
+const lf = (a, b, p) => b < 0 || a[b].n < 20 || !p ? 1 : (a[b].c / a[b].n) / p;
+const stt = a => ({ n: a.length, c: a.filter(o => o.c).length, v: a.filter(o => o.c).reduce((s, o) => s + o.val, 0) });
+function renderCancel() {
+  const N = S.N, O = buildOrders(), P = O.length ? O.filter(o => o.c).length / O.length : 0, last = S.cur.lastDate;
+  const wr = O.filter(o => o.bi === 0 && o.day <= N), wc = O.filter(o => o.bi === 1 && o.day <= N), tr = stt(wr), tc = stt(wc);
+  const ZB = bands(O, o => zb(o.z), 4), FB = bands(O, o => fb(o.fr), 3), pk = new Map();
+  O.forEach(o => { let a = pk.get(o.k); if (!a) pk.set(o.k, a = { n: 0, c: 0, os: [] }); a.n++; if (o.c) a.c++; a.os.push(o); });
+  const sr = k => { const a = pk.get(k); return a ? (a.c + 8 * P) / (a.n + 8) : P; };
+  const open = O.filter(o => o.bi === 1 && isOpen(o.status)).map(o => {
+    const lp = lf(ZB, zb(o.z), P), lfr = lf(FB, fb(o.fr), P), base = sr(o.k), age = Math.max(0, Math.floor((last - o.date) / 864e5)), prob = Math.min(.95, base * lp * lfr), why = [];
+    if (base >= 1.5 * P && pk.get(o.k).n >= 5) why.push('este item cancela ' + f1(100 * base) + '% neste canal (média geral ' + f1(100 * P) + '%)');
+    if (lp >= 1.5) why.push('prazo de ' + f1(o.z) + ' dias: cancela ' + f1(lp) + '× mais');
+    if (lfr >= 1.5) why.push('frete de ' + f1(o.fr) + '% do pedido: cancela ' + f1(lfr) + '× mais');
+    if (age >= 5) why.push('aberto há ' + age + ' dias');
+    return { ...o, prob, age, why, loss: prob * o.val };
+  }).sort((a, b) => b.loss - a.loss);
+  const expN = open.reduce((a, o) => a + o.prob, 0), expV = open.reduce((a, o) => a + o.loss, 0), dpp = tr.n && tc.n ? 100 * (tc.c / tc.n - tr.c / tr.n) : 0;
+  const mkts = [...new Set(O.map(o => o.mkt))].map(m => { const r = stt(wr.filter(o => o.mkt === m)), c = stt(wc.filter(o => o.mkt === m)), op = open.filter(o => o.mkt === m); return { m, r, c, n: op.length, loss: op.reduce((a, o) => a + o.loss, 0), pri: c.v + op.reduce((a, o) => a + o.loss, 0) }; }).filter(x => x.c.c || x.loss > 1).sort((a, b) => b.pri - a.pri);
+  const items = [...pk.entries()].map(([k, a]) => { const op = open.filter(o => o.k === k), c = stt(wc.filter(o => o.k === k)); return { k, a, o0: a.os[0], c, op, loss: op.reduce((s, o) => s + o.loss, 0), pri: c.v + op.reduce((s, o) => s + o.loss, 0) }; }).filter(x => x.c.c || x.loss > 1).sort((a, b) => b.pri - a.pri).slice(0, 6);
+  const lifts = [...ZB.map((b, i) => ({ t: ZL[i], b, l: lf(ZB, i, P) })), ...FB.map((b, i) => ({ t: FL[i], b, l: lf(FB, i, P) }))].filter(x => x.b.n >= 20).sort((a, b) => b.l - a.l);
+  const w = mkts[0], it0 = items[0];
+  let h = '<div class="v3"><div class="panel"><h2>Resumo</h2><p style="margin:6px 0 0;font-size:16px">Neste mês <b>' + rt(tc.c, tc.n) + '</b> dos pedidos foram cancelados (' + int(tc.c) + ' de ' + int(tc.n) + ', <b>' + brl(tc.v) + '</b>), contra ' + rt(tr.c, tr.n) + ' na referência (<b class="' + (dpp > 0 ? 'down' : 'up') + '">' + sg(dpp) + ' p.p.</b>). Há <b>' + int(open.length) + '</b> pedidos em aberto e a previsão é que <b class="down">≈ ' + f1(expN) + ' cancelem (' + brl(expV) + ')</b>.' +
+    (w ? ' O canal que mais exige atenção é <b>' + esc(w.m) + '</b>' : '') + (it0 ? ' e o item mais crítico é <b>' + esc(it0.o0.title || 'SKU ' + it0.o0.sku) + '</b> no <b>' + esc(it0.o0.mkt) + '</b>.' : '.') + '</p></div>';
+  h += '<div class="panel"><h2>O que mais leva a cancelar</h2><div class="note">Taxa de cancelamento nos dois meses juntos, por faixa. “×” é quanto cancela a mais que a média geral (' + f1(100 * P) + '%).</div>' +
+    (lifts.length ? '<ul class="loss-list">' + lifts.map(x => '<li><span class="nm">' + x.t + ' <small>· ' + int(x.b.n) + ' pedidos</small></span><span class="vl ' + (x.l >= 1.3 ? 'down' : x.l <= .8 ? 'up' : '') + ' num">' + rt(x.b.c, x.b.n) + ' <small style="font-weight:400">(' + f1(x.l) + '×)</small></span><span class="bar"><span style="width:' + Math.min(100, 100 * x.b.c / x.b.n / (100 * lifts.reduce((m, y) => Math.max(m, y.b.c / y.b.n), 0.01)) * 100) + '%"></span></span></li>').join('') + '</ul>' + (lifts[0].l >= 1.3 ? '<div class="act"><b>Conclusão:</b> pedidos com <b>' + lifts[0].t + '</b> cancelam ' + f1(lifts[0].l) + '× mais que a média. Vale priorizar o despacho e rever a promessa de prazo/frete neles.</div>' : '<div class="act"><b>Conclusão:</b> prazo e frete não explicam bem os cancelamentos; o problema parece estar no item ou no canal (veja abaixo).</div>') : '<div class="empty">Poucos pedidos para separar por faixa.</div>') + '</div>';
+  h += '<div class="panel"><h2>Canais: onde cancela mais</h2><div class="tscroll"><table><thead><tr><th>Canal</th><th>Referência</th><th>Atual</th><th>Variação</th><th>Em aberto</th><th>Perda prevista</th></tr></thead><tbody>' + mkts.map(x => { const d = x.r.n && x.c.n ? 100 * (x.c.c / x.c.n - x.r.c / x.r.n) : 0; return '<tr><td>' + esc(x.m) + '</td><td class="num">' + rt(x.r.c, x.r.n) + '<small>' + x.r.c + ' de ' + x.r.n + '</small></td><td class="num">' + rt(x.c.c, x.c.n) + '<small>' + x.c.c + ' de ' + x.c.n + ' · ' + brl(x.c.v) + '</small></td><td class="num ' + (d > 0.5 ? 'down' : d < -0.5 ? 'up' : 'flat') + '">' + sg(d) + ' p.p.</td><td class="num">' + x.n + '</td><td class="num"><b>' + brl(x.loss) + '</b></td></tr>'; }).join('') + '</tbody></table></div></div>';
+  h += '<div class="panel"><h2>Itens que merecem atenção</h2><div class="dxg">' + items.map(x => {
+    const cz = x.a.os.filter(o => o.c && o.z != null), nz = x.a.os.filter(o => !o.c && o.z != null), av = a => a.reduce((s, o) => s + o.z, 0) / a.length;
+    const tm = {}; x.a.os.forEach(o => { if (o.mot) tm[o.mot] = (tm[o.mot] || 0) + 1; }); const mt = Object.entries(tm).sort((a, b) => b[1] - a[1])[0];
+    const act = cz.length >= 3 && nz.length >= 3 && av(cz) >= 1.3 * av(nz) ? 'Os cancelados tinham prazo maior (' + f1(av(cz)) + ' dias contra ' + f1(av(nz)) + '). Despache esses primeiro e reduza o prazo prometido no anúncio.' : mt ? 'Origem/motivo mais comum dos cancelamentos: ' + mt[0] + '.' : 'Confirmar estoque real e dados do anúncio (medidas, compatibilidade) antes de despachar.';
+    return '<div class="dx"><div class="dxh"><b title="' + esc(x.o0.title) + '">' + esc(x.o0.title || 'SKU ' + x.o0.sku) + '</b></div><div class="note">SKU ' + esc(x.o0.sku) + ' · ' + esc(x.o0.mkt) + '</div><div style="margin-top:6px">Cancelou <b>' + x.c.c + ' de ' + x.c.n + '</b> pedidos neste mês (<b>' + rt(x.c.c, x.c.n) + '</b>); histórico dos 2 meses: ' + rt(x.a.c, x.a.n) + '</div><div>Em aberto: <b>' + x.op.length + '</b> pedidos, perda prevista <b class="down">' + brl(x.loss) + '</b></div><div class="act"><b>O que fazer:</b> ' + act + '</div></div>';
+  }).join('') + (items.length ? '' : '<div class="empty">Nenhum item com cancelamento relevante.</div>') + '</div></div>';
+  h += '<div class="panel"><h2>Pedidos em aberto para agir hoje</h2><div class="note">Ordenados por chance de cancelar × valor. Status considerados em aberto: ' + esc([...new Set(open.map(o => o.status))].join(', ') || 'nenhum') + '.</div><div class="tscroll"><table><thead><tr><th>Pedido / item</th><th style="text-align:left">Canal</th><th>Valor</th><th>Chance de cancelar</th><th style="text-align:left">Por quê</th></tr></thead><tbody>' +
+    open.slice(0, 15).map(o => '<tr><td class="item"><span class="t">' + esc(o.title || 'SKU ' + o.sku) + '</span><small>pedido ' + esc(o.id) + '</small></td><td style="text-align:left">' + esc(o.mkt) + '</td><td class="num">' + brl(o.val) + '</td><td class="num ' + (o.prob >= 1.5 * P ? 'down' : '') + '"><b>' + f1(100 * o.prob) + '%</b></td><td style="text-align:left;font-size:13px" class="mut">' + (o.why.length ? esc(o.why.join(' · ')) : 'perfil normal') + '</td></tr>').join('') + (open.length ? '' : '<tr><td colspan="5" class="empty" style="text-align:center">Nenhum pedido em aberto.</td></tr>') + '</tbody></table></div></div></div>';
+  $('#vCancel').innerHTML = h;
+}
+const rt = (c, n) => n ? f1(100 * c / n) + '%' : '—';
+
+$('#vQueda').addEventListener('click', e => {
+  const b = e.target.closest('[data-r]'); if (b) { S.qR = b.dataset.r; S.qL = 60; renderQueda(); }
+  if (e.target.closest('[data-more]')) { S.qL += 60; renderQueda(); }
+});
+$('#vQueda').addEventListener('change', e => { if (e.target.matches('[data-c]')) { S.qC = e.target.value; S.qL = 60; renderQueda(); } });
+function setMain(t) {
+  [['comp', 'vComp'], ['queda', 'vQueda'], ['cancel', 'vCancel']].forEach(([k, v]) => { $('#' + v).hidden = k !== t; $('#mt_' + k).setAttribute('aria-selected', k === t); });
+}
+['comp', 'queda', 'cancel'].forEach(k => $('#mt_' + k).addEventListener('click', () => setMain(k)));
+
+/* --- carga automática pelo ANYMARKET --- */
+async function carregarMes(which) {
+  const box = $(which === 'ref' ? '#dropRef' : '#dropCur'), info = box.querySelector('[data-info]'), v = $(which === 'ref' ? '#mRef' : '#mCur').value;
+  if (!v) return;
+  box.classList.remove('ok');
+  info.innerHTML = '<div class="meta">Buscando no ANYMARKET… na primeira vez pode levar até 2 minutos.</div>';
+  try {
+    const rows = await chamarScript('acao=linhas&mes=' + v);
+    const base = prepare(rows);
+    S[which] = base; S[which + '_name'] = v; box.classList.add('ok');
+    info.innerHTML = '<div class="meta"><b>' + MESES[base.month] + ' de ' + base.year + '</b><br>' + int(base.nOrders) + ' pedidos · último pedido em ' + hm(base.lastDate) + '</div>';
+    onBasesChanged(which);
+  } catch (err) {
+    S[which] = null; info.innerHTML = '<div class="err">' + esc(err.message || err) + '</div>';
+    onBasesChanged(which);
+  }
+}
+const ymStr = (y, mo) => y + '-' + String(mo).padStart(2, '0');
+(function () {
+  const h = new Date(), y = h.getFullYear(), mo = h.getMonth() + 1, p = new Date(y, mo - 2, 1);
+  $('#mCur').value = ymStr(y, mo); $('#mRef').value = ymStr(p.getFullYear(), p.getMonth() + 1);
+  $('#mCur').addEventListener('change', () => carregarMes('cur'));
+  $('#mRef').addEventListener('change', () => carregarMes('ref'));
+  $('#rec').addEventListener('click', async () => { await carregarMes('cur'); await carregarMes('ref'); });
+  (async () => { await carregarMes('cur'); await carregarMes('ref'); })();
+})();
+</script>
+</body>
+</html>
