@@ -64,6 +64,17 @@ tr.p1 .rk,tr.p2 .rk,tr.p3 .rk{background:var(--grad)}
 .sp{display:block}.sp rect{fill:var(--c1)}
 .resumo{display:flex;gap:18px;flex-wrap:wrap;margin:0 0 10px;font-size:13px}
 .resumo b{font-size:16px}
+.fbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.chip{border:1px solid var(--bd);background:var(--card);color:var(--tx);border-radius:12px;padding:8px 14px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;text-align:left;line-height:1.35}
+.chip small{display:block;color:var(--mut);font-weight:500;font-size:11px;margin-top:1px}
+.chip:hover{border-color:var(--c1)}
+.chip.on{background:var(--grad);color:#fff;border-color:transparent}
+.chip.on small{color:rgba(255,255,255,.88)}
+.chip.on .conta{background:rgba(255,255,255,.25);color:#fff;border-color:rgba(255,255,255,.55)}
+.visao{font-size:13px;color:var(--mut);margin:-4px 0 12px}.visao b{color:var(--tx)}
+tr.cl{cursor:pointer}tr.cl:hover td{background:var(--soft)}tr.sel td{background:var(--soft)}
+.st{font-size:11px;font-weight:600;border-radius:6px;padding:2px 7px;background:var(--soft);color:var(--mut);white-space:nowrap}
+.it{font-size:12px;line-height:1.5}.it small{color:var(--mut)}
 </style>
 <script src="config.js"></script><script src="api.js"></script>
 </head>
@@ -76,6 +87,9 @@ tr.p1 .rk,tr.p2 .rk,tr.p3 .rk{background:var(--grad)}
 </header>
 
 <main>
+<div class="fbar" id="fbar"></div>
+<div class="visao">Visão: <b id="vis">Todos os canais</b> · clique em um canal para filtrar a página inteira</div>
+
 <div class="grid">
   <div class="card kpi"><small>Faturamento hoje</small><b id="k1">–</b><div class="d" id="k1d"></div></div>
   <div class="card kpi"><small>Pedidos hoje</small><b id="k2">–</b><div class="d" id="k2d"></div></div>
@@ -93,26 +107,25 @@ tr.p1 .rk,tr.p2 .rk,tr.p3 .rk{background:var(--grad)}
 </div>
 
 <div class="card tab sec">
-  <div class="topo"><h2>Top 10 itens do dia</h2></div>
+  <div class="topo"><h2>Top 10 itens do dia</h2>
+    <div class="tg"><button id="oQ" class="on">Mais unidades</button><button id="oV">Maior faturamento</button></div></div>
   <div class="resumo" id="resumoTop"></div>
-  <table><thead><tr><th></th><th>Item</th><th>Vendas por hora</th><th class="n">Hoje</th><th class="n">Ontem*</th><th class="n">Faturamento</th><th class="n">Posição</th></tr></thead><tbody id="top"></tbody></table>
-  <div class="d" style="margin-top:8px">*Ontem até a mesma hora. Posição: comparada com o ranking de ontem até essa hora.</div>
+  <table><thead><tr><th></th><th>Item</th><th>Vendas por hora</th><th class="n">Preço un.</th><th class="n">Hoje</th><th class="n">Ontem*</th><th class="n">Faturamento</th><th class="n">Posição</th></tr></thead><tbody id="top"></tbody></table>
+  <div class="d" style="margin-top:8px">*Ontem até a mesma hora. Preço un. = faturamento do item dividido pelas unidades vendidas hoje. Posição: comparada com o ranking de ontem até essa hora.</div>
 </div>
 
 <div class="cols">
   <div class="card tab"><h2 style="margin-bottom:10px">Canais: hoje x ontem (até agora)</h2>
     <table><thead><tr><th>Canal</th><th class="n">Hoje</th><th class="n">Ontem</th><th class="n">Var.</th></tr></thead><tbody id="canais"></tbody></table></div>
-  <div class="card tab"><h2 style="margin-bottom:10px">Últimos pedidos</h2>
-    <table><thead><tr><th>Hora</th><th>Pedido</th><th>Canal</th><th class="n">Total</th></tr></thead><tbody id="ult"></tbody></table></div>
+  <div class="card tab"><h2 style="margin-bottom:10px">Resumo do canal</h2><div id="resCanal" class="d" style="font-size:13px;line-height:1.8"></div></div>
 </div>
+
+<div class="card tab sec"><h2 style="margin-bottom:10px">Últimos pedidos</h2>
+  <table><thead><tr><th>Hora</th><th>Pedido</th><th>Canal</th><th>Itens (SKU · qtd × valor un.)</th><th class="n">Total</th><th>Status</th></tr></thead><tbody id="ult"></tbody></table></div>
 </main>
 
 <script>
-// ===== CONFIGURE AQUI =====
-// URL_SCRIPT vem do arquivo config.js
-const INTERVALO_SEG = 120;                            // atualiza a cada 2 min
-// A senha (CHAVE_PAINEL) é pedida na primeira abertura e o navegador lembra.
-// ==========================
+const INTERVALO_SEG = 120; // atualiza a cada 2 min (URL e senha: config.js / api.js)
 
 const $ = id => document.getElementById(id);
 const brl = v => (v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
@@ -121,31 +134,29 @@ const esc = s => String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&l
 const NOMES={MERCADO_LIVRE:'Mercado Livre',SHOPEE:'Shopee',AMAZON_GLOBAL_API:'Amazon',MADEIRA_MADEIRA:'MadeiraMadeira',MAGAZINE_LUIZA:'Magazine Luiza',WEB_CONTINENTAL_V2:'Webcontinental'};
 const bonito=m=>NOMES[m]||m.replace(/_/g,' ').toLowerCase().replace(/(^|\s)\S/g,c=>c.toUpperCase());
 const canalHtml=s=>{const [m,...r]=String(s||'').split(' – ');const c=r.join(' – ').trim();return esc(bonito(m.trim()))+(c?`<span class="conta">${esc(c)}</span>`:'')};
+const canalTxt=s=>{const [m,...r]=String(s||'').split(' – ');const c=r.join(' – ').trim();return bonito(m.trim())+(c?' – '+c:'')};
 const pct = (a,b) => b>0 ? (a/b-1)*100 : null;
 const vp = p => p==null ? '<span class="d">–</span>' : `<span class="${p>=0?'up':'dn'}">${p>=0?'▲':'▼'} ${Math.abs(p).toFixed(0)}%</span>`;
-let DADOS=null, modo='hora', bloqueado=false, CHAVE='';
-try{ CHAVE=localStorage.getItem('chavePainel')||''; }catch(e){}
-function pedirChave(){
-  const c=prompt('Digite a senha do painel:');
-  if(c&&c.trim()){ CHAVE=c.trim(); try{localStorage.setItem('chavePainel',CHAVE)}catch(e){} }
-  return CHAVE;
-}
+const STATUS={PENDING:'Pendente',PAID_WAITING_SHIP:'Aguardando envio',INVOICED:'Faturado',PAID_WAITING_DELIVERY:'Em transporte',CONCLUDED:'Concluído',CANCELED:'Cancelado'};
+const stt=s=>STATUS[s]||String(s||'').replace(/_/g,' ').toLowerCase();
+const curto=(s,n)=>{s=String(s||'');return s.length>n?s.slice(0,n-1)+'…':s};
+
+let DADOS=null, modo='hora', ordemTop='qtd', sel='__TODOS__', bloqueado=false;
+try{ sel=localStorage.getItem('canalSel')||'__TODOS__'; }catch(e){}
 $('data').textContent=new Date().toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'long',year:'numeric'});
 
-function buscar(){
-  return new Promise((ok,err)=>{
-    const cb='cb'+Date.now(), s=document.createElement('script');
-    const fim=()=>{delete window[cb];s.remove();clearTimeout(t)};
-    const t=setTimeout(()=>{fim();err(new Error('tempo esgotado'))},90000);
-    window[cb]=d=>{fim();ok(d)};
-    s.onerror=()=>{fim();err(new Error('não foi possível acessar a URL do script'))};
-    s.src=URL_SCRIPT.trim()+'?k='+encodeURIComponent(CHAVE.trim())+'&callback='+cb;
-    document.head.appendChild(s);
-  });
+function visao(){ if(!DADOS.visoes[sel]) sel='__TODOS__'; return DADOS.visoes[sel]; }
+
+function chips(){
+  const d=DADOS, T=d.visoes.__TODOS__.hoje;
+  const lista=[{canal:'__TODOS__',hoje:T}].concat(d.canais.map(c=>({canal:c.canal,hoje:c.hoje})));
+  $('fbar').innerHTML=lista.map(c=>`<button class="chip ${c.canal===sel?'on':''}" data-c="${esc(c.canal)}">${c.canal==='__TODOS__'?'Todos os canais':canalHtml(c.canal)}<small>${brl0(c.hoje.valor)} · ${c.hoje.pedidos} ped.</small></button>`).join('');
+  $('fbar').querySelectorAll('button').forEach(b=>b.onclick=()=>escolher(b.dataset.c));
 }
+function escolher(c){ sel=c; try{localStorage.setItem('canalSel',sel)}catch(e){}; render(); }
 
 function grafico(){
-  const d=DADOS, ag=d.horaAtual, H=d.porHora;
+  const d=DADOS, ag=d.horaAtual, H=visao().porHora;
   let hj=H.hoje.map(x=>x.valor), on=H.ontem.map(x=>x.valor);
   if(modo==='acum'){ let a=0,b=0; hj=hj.map(v=>a+=v); on=on.map(v=>b+=v); }
   const max=Math.max(1,...on,...hj.slice(0,ag+1));
@@ -158,21 +169,26 @@ const spark=(arr,ag)=>{
   return '<svg class="sp" viewBox="0 0 96 24" width="96" height="24">'+a.map((v,i)=>{const h=v?Math.max(3,v/m*22):1;return `<rect x="${i*4}" y="${24-h}" width="3" height="${h}" rx="1" opacity="${v?1:.25}"><title>${i}h: ${v} un.</title></rect>`}).join('')+'</svg>';
 };
 
-function topItens(d){
-  const ag=d.horaAtual, t=d.topItens||[], tot=Math.max(1,d.hoje.valor), mq=Math.max(1,...t.map(i=>i.qtd));
+function topItens(V){
+  const ag=DADOS.horaAtual, tot=Math.max(1,V.hoje.valor), val=ordemTop==='val';
+  const t=V.topItens.slice().sort((a,b)=>val?(b.valor-a.valor||b.qtd-a.qtd):(b.qtd-a.qtd||b.valor-a.valor)).slice(0,10);
+  const mx=Math.max(1,...t.map(i=>val?i.valor:i.qtd));
   const soma=t.reduce((s,i)=>s+i.valor,0), un=t.reduce((s,i)=>s+i.qtd,0);
-  $('resumoTop').innerHTML=t.length?`<span>Os 10 somam <b>${brl0(soma)}</b></span><span><b>${(soma/tot*100).toFixed(0)}%</b> do faturamento de hoje</span><span><b>${un}</b> unidades</span>`:'';
+  $('resumoTop').innerHTML=t.length?`<span>Os 10 somam <b>${brl0(soma)}</b></span><span><b>${(soma/tot*100).toFixed(0)}%</b> do faturamento de ${sel==='__TODOS__'?'hoje':'hoje neste canal'}</span><span><b>${un}</b> unidades</span>`:'';
   $('top').innerHTML=t.map((i,n)=>{
-    const alta=i.qtd>=2&&i.qtd>=i.qtdOntem*1.5+1;
+    const alta=i.qtd>=2&&i.qtd>=i.qtdOntem*1.5+1, po=val?i.posOntemV:i.posOntem;
     let mov;
-    if(!i.posOntem) mov='<span class="tag t-novo">NOVO</span>';
-    else{const df=i.posOntem-(n+1); mov=df>0?`<span class="mov up">▲ ${df}</span>`:df<0?`<span class="mov dn">▼ ${-df}</span>`:'<span class="d">=</span>';}
-    return `<tr class="p${n+1}"><td><div class="rk">${n+1}</div></td><td class="nm">${esc(i.nome)}${alta?'<span class="tag t-alta">EM ALTA</span>':''}<br><small class="d">SKU ${esc(i.sku)}</small><div class="bar" style="width:${i.qtd/mq*100}%"></div></td><td>${spark(i.h||[],ag)}</td><td class="n"><b>${i.qtd}</b></td><td class="n">${i.qtdOntem}</td><td class="n">${brl0(i.valor)}<br><small class="d">${(i.valor/tot*100).toFixed(1)}% do dia</small></td><td class="n">${mov}</td></tr>`;
-  }).join('')||'<tr><td colspan="7">Sem vendas hoje</td></tr>';
+    if(!po) mov='<span class="tag t-novo">NOVO</span>';
+    else{const df=po-(n+1); mov=df>0?`<span class="mov up">▲ ${df}</span>`:df<0?`<span class="mov dn">▼ ${-df}</span>`:'<span class="d">=</span>';}
+    return `<tr class="p${n+1}"><td><div class="rk">${n+1}</div></td><td class="nm">${esc(i.nome)}${alta?'<span class="tag t-alta">EM ALTA</span>':''}<br><small class="d">SKU ${esc(i.sku)}</small><div class="bar" style="width:${(val?i.valor:i.qtd)/mx*100}%"></div></td><td>${spark(i.h||[],ag)}</td><td class="n">${brl(i.preco)}</td><td class="n"><b>${i.qtd}</b></td><td class="n">${i.qtdOntem}</td><td class="n">${brl0(i.valor)}<br><small class="d">${(i.valor/tot*100).toFixed(1)}% do dia</small></td><td class="n">${mov}</td></tr>`;
+  }).join('')||'<tr><td colspan="8">Sem vendas hoje neste canal</td></tr>';
 }
 
-function render(d){
-  const ag=d.horaAtual, h=d.hoje, o=d.ontemAte, sp=d.semanaPassadaAte;
+function render(){
+  const d=DADOS, V=visao(), ag=d.horaAtual, h=V.hoje, o=V.ontemAte, sp=V.semanaPassadaAte;
+  chips();
+  $('vis').textContent=sel==='__TODOS__'?'Todos os canais':canalTxt(sel);
+
   $('k1').textContent=brl(h.valor);
   $('k1d').innerHTML=`${vp(pct(h.valor,o.valor))} vs ontem até ${ag}h (${brl0(o.valor)})<br>${vp(pct(h.valor,sp.valor))} vs semana passada`;
   $('k2').textContent=h.pedidos;
@@ -180,13 +196,13 @@ function render(d){
   const t=h.pedidos?h.valor/h.pedidos:0, to=o.pedidos?o.valor/o.pedidos:0;
   $('k3').textContent=brl(t);
   $('k3d').innerHTML=`${vp(pct(t,to))} vs ontem (${brl0(to)})`;
-  const proj=o.valor>0?h.valor/o.valor*d.ontemTotal.valor:0;
-  $('k4').textContent=brl0(proj);
-  $('k4d').innerHTML=`Estimativa pelo ritmo de ontem.<br>Ontem fechou em ${brl0(d.ontemTotal.valor)} (${d.ontemTotal.pedidos} pedidos)`;
+  const proj=o.valor>0?h.valor/o.valor*V.ontemTotal.valor:0;
+  $('k4').textContent=o.valor>0?brl0(proj):'–';
+  $('k4d').innerHTML=o.valor>0?`Estimativa pelo ritmo de ontem${sel==='__TODOS__'?'':' neste canal'}.<br>Ontem fechou em ${brl0(V.ontemTotal.valor)} (${V.ontemTotal.pedidos} pedidos)`:'Sem vendas ontem neste canal para projetar.';
 
   grafico();
 
-  const H=d.porHora, hj=H.hoje, on=H.ontem;
+  const H=V.porHora, hj=H.hoje, on=H.ontem;
   let melhor=0; hj.forEach((x,i)=>{if(i<=ag&&x.valor>hj[melhor].valor)melhor=i});
   const p=pct(h.valor,o.valor);
   let txt = p==null ? 'Sem base de comparação com ontem.' :
@@ -195,31 +211,37 @@ function render(d){
   txt+=` Hora atual (${ag}h): ${hj[ag].pedidos} pedidos, ${brl0(hj[ag].valor)}; ontem nessa hora: ${on[ag].pedidos} pedidos, ${brl0(on[ag].valor)}.`;
   $('ins').innerHTML=txt;
 
-  topItens(d);
+  topItens(V);
 
-  const tot=Math.max(1,h.valor);
-  $('canais').innerHTML=d.canais.map(c=>`<tr><td>${canalHtml(c.canal)}<div class="bar" style="width:${c.hoje.valor/tot*100}%"></div></td><td class="n">${brl0(c.hoje.valor)}<br><small class="d">${c.hoje.pedidos} ped.</small></td><td class="n">${brl0(c.ontem.valor)}<br><small class="d">${c.ontem.pedidos} ped.</small></td><td class="n">${vp(pct(c.hoje.valor,c.ontem.valor))}</td></tr>`).join('')||'<tr><td colspan="4">Sem vendas hoje</td></tr>';
+  const T=d.visoes.__TODOS__.hoje, tot=Math.max(1,T.valor);
+  $('canais').innerHTML=d.canais.map(c=>`<tr class="cl ${c.canal===sel?'sel':''}" data-c="${esc(c.canal)}"><td>${canalHtml(c.canal)}<div class="bar" style="width:${c.hoje.valor/tot*100}%"></div></td><td class="n">${brl0(c.hoje.valor)}<br><small class="d">${c.hoje.pedidos} ped. · ${(c.hoje.valor/tot*100).toFixed(0)}% do dia</small></td><td class="n">${brl0(c.ontem.valor)}<br><small class="d">${c.ontem.pedidos} ped.</small></td><td class="n">${vp(pct(c.hoje.valor,c.ontem.valor))}</td></tr>`).join('')||'<tr><td colspan="4">Sem vendas</td></tr>';
+  $('canais').querySelectorAll('tr.cl').forEach(r=>r.onclick=()=>escolher(r.dataset.c));
 
-  $('ult').innerHTML=d.ultimos.map(u=>`<tr><td>${esc(String(u.data).substring(11,16))}</td><td>${esc(u.id)}</td><td>${canalHtml(u.canal)}</td><td class="n">${brl(u.total)}</td></tr>`).join('');
+  const part=T.valor?h.valor/T.valor*100:0;
+  $('resCanal').innerHTML=`Faturamento hoje: <b>${brl(h.valor)}</b>${sel==='__TODOS__'?'':` (${part.toFixed(1)}% do total da loja)`}<br>Pedidos: <b>${h.pedidos}</b> · Ticket médio: <b>${brl(t)}</b><br>Até ${ag}h ontem: <b>${brl0(o.valor)}</b> (${o.pedidos} pedidos)<br>Mesmo dia na semana passada, até ${ag}h: <b>${brl0(sp.valor)}</b> (${sp.pedidos} pedidos)<br>Projeção de fechamento: <b>${o.valor>0?brl0(proj):'–'}</b>`;
+
+  $('ult').innerHTML=V.ultimos.map(u=>{
+    const its=(u.itens||[]).map(i=>`<div class="it">${esc(curto(i.nome,46))} <small>· SKU ${esc(i.sku)} · ${i.qtd} × ${brl(i.unit)}</small></div>`).join('')+(u.nItens>3?`<div class="it"><small>+ ${u.nItens-3} item(ns)</small></div>`:'');
+    return `<tr><td>${esc(String(u.data).substring(11,16))}</td><td>${esc(u.id)}</td><td>${canalHtml(u.canal)}</td><td>${its||'<small class="d">–</small>'}</td><td class="n">${brl(u.total)}</td><td><span class="st">${esc(stt(u.status))}</span></td></tr>`;
+  }).join('')||'<tr><td colspan="6">Sem pedidos hoje neste canal</td></tr>';
   $('status').textContent='Atualizado às '+new Date().toLocaleTimeString('pt-BR');
 }
 
 async function carregar(){
   if(bloqueado) return;
-  if(!CHAVE && !pedirChave()){ bloqueado=true; $('status').textContent='Senha necessária. Atualize a página (F5) e digite a senha.'; return; }
   try{
-    const d=await buscar();
-    if(d.erro) throw new Error(d.erro);
-    DADOS=d; render(d);
+    const d=await chamarScript('',90);
+    if(!d||!d.visoes) throw new Error('resposta inesperada do script (cole o código novo e implante uma nova versão)');
+    DADOS=d; render();
   }catch(e){
-    if(/acesso negado/.test(e.message)){
-      bloqueado=true; CHAVE=''; try{localStorage.removeItem('chavePainel')}catch(x){}
-      $('status').textContent='Senha incorreta. Atualize a página (F5) para tentar de novo.';
-    } else { $('status').textContent='Erro ao carregar: '+e.message; }
+    if(/Senha/.test(e.message)) bloqueado=true;
+    $('status').textContent=/Senha/.test(e.message)?e.message:'Erro ao carregar: '+e.message;
   }
 }
 $('bH').onclick=()=>{modo='hora';$('bH').className='on';$('bA').className='';if(DADOS)grafico()};
 $('bA').onclick=()=>{modo='acum';$('bA').className='on';$('bH').className='';if(DADOS)grafico()};
+$('oQ').onclick=()=>{ordemTop='qtd';$('oQ').className='on';$('oV').className='';if(DADOS)topItens(visao())};
+$('oV').onclick=()=>{ordemTop='val';$('oV').className='on';$('oQ').className='';if(DADOS)topItens(visao())};
 carregar();
 setInterval(carregar,INTERVALO_SEG*1000);
 </script>
